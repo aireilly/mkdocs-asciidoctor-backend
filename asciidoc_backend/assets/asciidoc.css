@@ -1,0 +1,34 @@
+/* asciidoc_backend/assets/asciidoc.css */
+
+/* Admonitions */
+.admonitionblock { margin: 1em 0; }
+.admonitionblock > .content { padding: .6em 1em; }
+
+/* Tables */
+table.tableblock { width: 100%; border-collapse: collapse; }
+
+/* ---------- Callouts in code ---------- */
+/* Hide the circular bubble */
+.md-typeset .conum[data-value] {
+  display: none !important;
+}
+
+/* Show the textual fallback "(n)" and style it subtly */
+.md-typeset b.conum {
+  display: inline;
+  font-weight: 600;
+  font-size: .85em;
+  color: var(--md-default-fg-color--light, rgba(0,0,0,.54));
+  vertical-align: baseline;
+  margin-left: .15rem;
+}
+
+/* ---------- Callout list as ordered list ---------- */
+.md-typeset ol.colist {
+  list-style: decimal;
+  padding-left: 1.5rem;
+  margin: .5rem 0;
+}
+.md-typeset ol.colist li {
+  margin: .25rem 0;
+}

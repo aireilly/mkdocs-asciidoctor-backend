@@ -1,0 +1,52 @@
+site_name: Asciidoctor backend demo
+repo_url: https://github.com/aireilly/mkdocs-asciidoctor-backend
+repo_name: mkdocs-asciidoctor-backend
+edit_uri: edit/main/demo/docs/
+
+theme:
+  name: material
+  features:
+    - content.action.edit
+    - navigation.top
+    - navigation.tracking
+    - navigation.footer
+    - toc.follow
+    - toc.sticky
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.code.annotate
+    - palette.toggle
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+
+exclude_docs: |
+  partials/**
+  snippets/**
+  modules/**
+
+plugins:
+  - search
+  - asciidoc_backend:
+      safe_mode: safe
+      base_dir: docs
+      attributes:
+        showtitle: true
+        sectanchors: true
+        sectlinks: true
+        icons: font
+        idprefix: ""
+        idseparator: "-"
+        outfilesuffix: .html
+        source-highlighter: rouge

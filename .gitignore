@@ -1,0 +1,15 @@
+# MkDocs output
+/site/
+/demo/site/
+
+# Python build stuff
+.venv/
+venv/
+.pycache__/
+*.py[cod]
+__pycache__/
+
+# Packaging
+dist/
+build/
+*.egg-info/

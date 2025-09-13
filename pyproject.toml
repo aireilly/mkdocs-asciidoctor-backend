@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mkdocs-asciidoctor-backend"
+version = "0.0.0"
+description = "AsciiDoc backend for MkDocs using Asciidoctor"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = ["mkdocs>=1.6", "beautifulsoup4>=4.11"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "beautifulsoup4>=4.11"]
+
+[project.entry-points."mkdocs.plugins"]
+asciidoc_backend = "asciidoc_backend:AsciiDocPlugin"
+
+[tool.setuptools]
+packages = ["asciidoc_backend"]
+
+[tool.setuptools.package-data]
+asciidoc_backend = ["assets/*.css", "assets/*.js"]

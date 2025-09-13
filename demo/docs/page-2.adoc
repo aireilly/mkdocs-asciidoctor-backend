@@ -1,0 +1,12 @@
+= Second Page
+
+== Other Section [[other]]
+
+Content with a diagram:
+
+[plantuml, diag-1, format=svg]
+----
+@startuml
+Alice -> Bob : Hi
+@enduml
+----
