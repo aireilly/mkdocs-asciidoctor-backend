@@ -4,11 +4,14 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mkdocs-asciidoctor-backend"
-version = "0.0.0"
-description = "AsciiDoc backend for MkDocs using Asciidoctor"
+version = "0.0.1"
+description = "Asciidoctor backend for MkDocs"
 readme = "README.md"
 requires-python = ">=3.9"
 dependencies = ["mkdocs>=1.6", "beautifulsoup4>=4.11"]
+
+[flake8]
+ignore = "E501"
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "beautifulsoup4>=4.11"]

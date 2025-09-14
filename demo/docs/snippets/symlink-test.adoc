@@ -1,0 +1,6 @@
+This is a symlink test! 
+
+[source,terminal]
+----
+$ test
+----

@@ -10,6 +10,8 @@ This is an admonition.
 
 include::snippets/_snippet.adoc[]
 
+include::modules/module.adoc[leveloffset=+1]
+
 == anchors
 
 [[explicit-id]]Heading with explicit id

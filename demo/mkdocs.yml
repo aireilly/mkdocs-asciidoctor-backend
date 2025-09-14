@@ -39,6 +39,8 @@ exclude_docs: |
 plugins:
   - search
   - asciidoc_backend:
+      fail_on_error: false
+      ignore_missing: true
       safe_mode: safe
       base_dir: docs
       attributes:

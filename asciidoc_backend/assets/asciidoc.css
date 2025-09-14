@@ -8,26 +8,36 @@
 table.tableblock { width: 100%; border-collapse: collapse; }
 
 /* ---------- Callouts in code ---------- */
-/* Hide the circular bubble */
-.md-typeset .conum[data-value] {
-  display: none !important;
+/* Bubbles inside code listings */
+.listingblock pre .conum {
+  position: relative;
+  display: inline-block;
+  width: 1.4em;
+  height: 1.4em;
+  line-height: 1.4em;
+  text-align: center;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-style: normal;
+  font-weight: 600;
+  vertical-align: baseline;
 }
 
-/* Show the textual fallback "(n)" and style it subtly */
-.md-typeset b.conum {
-  display: inline;
-  font-weight: 600;
-  font-size: .85em;
-  color: var(--md-default-fg-color--light, rgba(0,0,0,.54));
-  vertical-align: baseline;
-  margin-left: .15rem;
+/* Show the number from data-value; nothing gets copied */
+.listingblock pre .conum::after {
+  content: attr(data-value);
 }
+
+/* Hide any fallback content if present */
+.listingblock pre .conum > * { display: none !important; }
+
 
 /* ---------- Callout list as ordered list ---------- */
 .md-typeset ol.colist {
   list-style: decimal;
   padding-left: 1.5rem;
   margin: .5rem 0;
+  font-size: small;
 }
 .md-typeset ol.colist li {
   margin: .25rem 0;

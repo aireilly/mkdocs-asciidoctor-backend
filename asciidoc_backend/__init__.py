@@ -1,12 +1,13 @@
 # asciidoc_backend/__init__.py
+import os
 import pathlib
 import subprocess
-import hashlib
 import re
 from dataclasses import dataclass
 from typing import Dict, Optional, Tuple, List
 
-from bs4 import BeautifulSoup
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from bs4 import BeautifulSoup, NavigableString
 from importlib import resources
 from mkdocs.plugins import BasePlugin
 from mkdocs.config import config_options
@@ -14,6 +15,7 @@ from mkdocs.config.defaults import MkDocsConfig
 from mkdocs.structure.files import Files, File
 from mkdocs.structure.pages import Page
 from mkdocs.structure.toc import TableOfContents as Toc, AnchorLink  # MkDocs 1.6+
+
 
 @dataclass
 class Rendered:
@@ -24,10 +26,13 @@ class Rendered:
 
 class AsciiDocPlugin(BasePlugin):
     """
-    True AsciiDoc backend for MkDocs 1.6+
-    - Renders .adoc via Asciidoctor
+    AsciiDoc backend for MkDocs 1.6+
+    - Renders .adoc via Asciidoctor (content-only)
     - Injects HTML/TOC/meta
-    - Ships CSS and an Antora-like copy cleaner JS (no user config needed)
+    - Ships CSS and a copy-cleaner JS
+
+    Performance: single BeautifulSoup pass, optional concurrency, mtime cache.
+    Robustness: skip broken symlinks/vanished files; optional ignore-missing.
     """
     config_scheme = (
         ("asciidoctor_cmd", config_options.Type(str, default="asciidoctor")),
@@ -37,12 +42,17 @@ class AsciiDocPlugin(BasePlugin):
         ("requires", config_options.Type(list, default=[])),
         ("fail_on_error", config_options.Type(bool, default=True)),
         ("trace", config_options.Type(bool, default=False)),
+        ("max_workers", config_options.Type(int, default=8)),
+        ("ignore_missing", config_options.Type(bool, default=False)),
     )
 
-    _cache: Dict[str, Tuple[float, str, Rendered]]
+    # (mtime, Rendered)
+    _cache: Dict[str, Tuple[float, Rendered]]
+    _memo: Dict[str, Rendered]  # per-build memo
 
     def on_config(self, config: MkDocsConfig):
         self._cache = {}
+        self._memo = {}
         self._adoc_pages: Dict[str, pathlib.Path] = {}
 
         self._project_dir = pathlib.Path(config.config_file_path).parent.resolve()
@@ -57,14 +67,24 @@ class AsciiDocPlugin(BasePlugin):
         self._reqs = self.config["requires"] or []
         self._fail = self.config["fail_on_error"]
         self._trace = self.config["trace"]
+        self._max_workers = self.config["max_workers"]
+        self._ignore_missing = self.config["ignore_missing"]
 
-        # Ship CSS + JS from our package
+        # Fastest BS parser available
+        self._bs_parser = "html.parser"
+        try:
+            import lxml  # noqa: F401
+            self._bs_parser = "lxml"
+        except Exception:
+            pass
+
+        # Ship CSS + JS from our package (written in on_post_build)
         self._pkg_css_res = resources.files(__package__) / "assets" / "asciidoc.css"
-        self._pkg_js_res  = resources.files(__package__) / "assets" / "strip_callouts.js"
+        self._pkg_js_res = resources.files(__package__) / "assets" / "strip_callouts.js"
         self._pkg_css_href = "assets/asciidoc.css"
-        self._pkg_js_href  = "assets/strip_callouts_like_antora.js"
+        self._pkg_js_href = "assets/strip_callouts.js"
 
-        # Auto-include into the theme
+        # Auto-include into the theme (keeps MkDocs/Material CSS intact)
         config.extra_css.append(self._pkg_css_href)
         config.extra_javascript.append(self._pkg_js_href)
         return config
@@ -78,8 +98,26 @@ class AsciiDocPlugin(BasePlugin):
             if f.src_path.endswith(".adoc"):
                 files.remove(f)
 
+        # Remove only those missing/broken files that belong to docs_dir
+        if self._ignore_missing:
+            for f in list(files):
+                try:
+                    base = pathlib.Path(f.src_dir).resolve()
+                except Exception:
+                    continue
+                if base != src_dir:
+                    continue
+                abs_src = pathlib.Path(getattr(f, "abs_src_path", "")) if getattr(f, "abs_src_path", None) else (base / f.src_path)
+                try:
+                    if (not abs_src.exists()) or abs_src.is_dir():
+                        files.remove(f)
+                except OSError:
+                    files.remove(f)
+
         # Add .adoc as documentation pages (exclude common partials)
         for p in src_dir.rglob("*.adoc"):
+            if not self._is_valid_adoc_path(p):
+                continue
             rel = p.relative_to(src_dir).as_posix()
             if rel.startswith(("partials/", "snippets/", "modules/")):
                 continue
@@ -90,9 +128,7 @@ class AsciiDocPlugin(BasePlugin):
                 dest_dir=config.site_dir,
                 use_directory_urls=config.use_directory_urls,
             )
-
-            # MkDocs 1.6 expects a callable
-            f.is_documentation_page = (lambda f=f: True)
+            f.is_documentation_page = (lambda f=f: True)  # MkDocs 1.6
 
             self._adoc_pages[rel] = p
 
@@ -124,10 +160,45 @@ class AsciiDocPlugin(BasePlugin):
 
         return files
 
+    def on_nav(self, nav, config: MkDocsConfig, files: Files):
+        self._memo = {}
+        to_build: List[pathlib.Path] = []
+
+        for rel, p in list(self._adoc_pages.items()):
+            if not self._is_valid_adoc_path(p):
+                del self._adoc_pages[rel]
+                continue
+            key = str(p)
+            mtime = self._safe_mtime(p)
+            if mtime is None:
+                del self._adoc_pages[rel]
+                continue
+            cached = self._cache.get(key)
+            if not (cached and cached[0] == mtime):
+                to_build.append(p)
+
+        if not to_build:
+            return
+
+        workers = max(1, min(self._max_workers, (os.cpu_count() or 2)))
+        if workers == 1:
+            for p in to_build:
+                src, rendered = self._render_fresh(p)
+                mt = self._safe_mtime(src)
+                if mt is not None:
+                    self._cache[str(src)] = (mt, rendered)
+        else:
+            with ThreadPoolExecutor(max_workers=workers) as ex:
+                futs = {ex.submit(self._render_fresh, p): p for p in to_build}
+                for fut in as_completed(futs):
+                    src, rendered = fut.result()
+                    mt = self._safe_mtime(src)
+                    if mt is not None:
+                        self._cache[str(src)] = (mt, rendered)
+
     def on_post_build(self, config: MkDocsConfig):
         """Write packaged CSS/JS into site/ so extra_css/extra_javascript resolve."""
         site_dir = pathlib.Path(config.site_dir)
-
         for res, href in ((self._pkg_css_res, self._pkg_css_href),
                           (self._pkg_js_res,  self._pkg_js_href)):
             out = site_dir / href
@@ -159,29 +230,44 @@ class AsciiDocPlugin(BasePlugin):
             return html
         src_abs = self._adoc_pages[page.file.src_uri]
         rendered = self._render_adoc_cached(src_abs)
-        page.toc = rendered.toc  # populate RHS ToC
-
-        fixed = self._admonitions_to_material(rendered.html)
-        fixed = self._callout_table_to_ol(fixed)
-        fixed = self._strip_conum_from_code(fixed)  # visible bubbles; not copied
-        return fixed
+        page.toc = rendered.toc
+        return rendered.html
 
     # ---------- Internals ----------
 
     def _render_adoc_cached(self, src_path: pathlib.Path) -> Rendered:
         key = str(src_path)
-        mtime = src_path.stat().st_mtime
-        sha1 = self._sha1_file(src_path)
+
+        memo_hit = self._memo.get(key)
+        if memo_hit:
+            return memo_hit
+
+        mtime = self._safe_mtime(src_path)
+        if mtime is None:
+            msg = f"AsciiDoc source missing or broken symlink: {src_path}"
+            if self._fail and not self._ignore_missing:
+                raise SystemExit(msg)
+            return Rendered(html=f"<pre>{self._escape(msg)}</pre>", toc=Toc([]), meta={})
+
         cached = self._cache.get(key)
-        if cached and cached[0] == mtime and cached[1] == sha1:
-            return cached[2]
-        html, meta = self._run_asciidoctor(src_path)
-        toc = self._build_toc(html)
-        rendered = Rendered(html=html, toc=toc, meta=meta)
-        self._cache[key] = (mtime, sha1, rendered)
+        if cached and cached[0] == mtime:
+            rendered = cached[1]
+            self._memo[key] = rendered
+            return rendered
+
+        src, rendered = self._render_fresh(src_path)
+        mt = self._safe_mtime(src)
+        if mt is not None:
+            self._cache[str(src)] = (mt, rendered)
+        self._memo[key] = rendered
         return rendered
 
-    def _run_asciidoctor(self, src: pathlib.Path) -> Tuple[str, dict]:
+    def _render_fresh(self, src: pathlib.Path) -> Tuple[pathlib.Path, Rendered]:
+        html = self._run_asciidoctor(src)
+        html, toc, meta = self._postprocess_once(html)
+        return src, Rendered(html=html, toc=toc, meta=meta)
+
+    def _run_asciidoctor(self, src: pathlib.Path) -> str:
         args = [self._cmd, "-b", "html5", "-s", "-o", "-", str(src)]
         args[1:1] = ["-S", self._safe]
         args.extend(["-B", str(self._base_dir)])
@@ -191,26 +277,45 @@ class AsciiDocPlugin(BasePlugin):
             args.extend(["-a", f"{k}={v}"])
         if self._trace:
             args.append("--trace")
+
+        if self._ignore_missing:
+            args.extend(["--failure-level", "FATAL"])
+
         try:
             proc = subprocess.run(args, check=True, capture_output=True)
+            return proc.stdout.decode("utf-8", errors="ignore")
         except FileNotFoundError:
             msg = f"Asciidoctor not found: '{self._cmd}'. Install with: gem install asciidoctor"
-            if self._fail:
+            if self._fail and not self._ignore_missing:
                 raise SystemExit(msg)
-            return f"<pre>{self._escape(msg)}</pre>", {}
+            return f"<pre>{self._escape(msg)}</pre>"
         except subprocess.CalledProcessError as e:
             stderr = e.stderr.decode("utf-8", errors="ignore")
-            msg = f"Asciidoctor failed for {src}:\n{stderr}"
-            if self._fail:
-                raise SystemExit(msg)
-            return f"<pre>{self._escape(msg)}</pre>", {}
-        html = proc.stdout.decode("utf-8", errors="ignore")
-        meta = self._extract_meta_from_html(html)
-        return html, meta
+            if self._ignore_missing or not self._fail:
+                if any(s in stderr.lower() for s in (
+                    "no such file or directory",
+                    "include file not found",
+                    "enoent",
+                    "cannot open",
+                )):
+                    return (
+                        f"<pre>{self._escape(f'Asciidoctor warning for {src} (missing content ignored):')}\n"
+                        f"{self._escape(stderr)}</pre>"
+                    )
+            raise SystemExit(f"Asciidoctor failed for {src}:\n{stderr}")
 
-    def _build_toc(self, html: str) -> Toc:
-        soup = BeautifulSoup(html, "html.parser")
-        # Skip Asciidoctor doc title (sect0)
+    # Build ToC + rewrites + meta in a single pass
+    def _postprocess_once(self, html: str) -> Tuple[str, Toc, dict]:
+        soup = BeautifulSoup(html, self._bs_parser)
+
+        meta: dict = {}
+        title_el = soup.find("h1", class_="sect0") or soup.find("h1") or soup.find("title")
+        if title_el:
+            meta["title"] = title_el.get_text(" ", strip=True)
+        desc = soup.find("meta", attrs={"name": "description"})
+        if desc and desc.get("content"):
+            meta["description"] = desc["content"]
+
         headings = [
             h for h in soup.find_all(["h1", "h2", "h3", "h4", "h5", "h6"])
             if not (h.name == "h1" and "sect0" in (h.get("class") or []))
@@ -218,11 +323,85 @@ class AsciiDocPlugin(BasePlugin):
         for h in headings:
             if not h.get("id"):
                 h["id"] = self._slugify(h.get_text(" ", strip=True))
+        toc = self._toc_from_headings(headings)
 
-        # MkDocs 1.6: AnchorLink(title, id_without_hash, children)
+        kinds = {"note", "tip", "important", "caution", "warning"}
+        for blk in soup.select("div.admonitionblock"):
+            classes = set(blk.get("class", []))
+            kind = next((k for k in kinds if k in classes), "note")
+            content = blk.select_one(".content") or blk
+            title_el2 = content.select_one(".title")
+            title_text = title_el2.get_text(" ", strip=True) if title_el2 else kind.capitalize()
+            if title_el2:
+                title_el2.extract()
+            new = soup.new_tag("div")
+            new["class"] = ["admonition", kind]
+            title_p = soup.new_tag("p")
+            title_p["class"] = ["admonition-title"]
+            title_p.string = title_text
+            new.append(title_p)
+            for child in list(content.children):
+                new.append(child.extract())
+            blk.replace_with(new)
+
+        for colist in soup.select("div.colist"):
+            table = colist.find("table")
+            if not table:
+                continue
+            rows = table.find_all("tr") or []
+            if not rows:
+                continue
+            ol = soup.new_tag("ol", **{"class": "colist"})
+            for tr in rows:
+                tds = tr.find_all("td")
+                if len(tds) < 2:
+                    continue
+                li = soup.new_tag("li")
+                li.append(BeautifulSoup(tds[1].decode_contents(), self._bs_parser))
+                ol.append(li)
+            table.replace_with(ol)
+
+            # Callouts in code listings
+            for pre in soup.select("div.listingblock pre"):
+                # Normalize any "(n)" / "<n>" inside .conum to data-value
+                for node in pre.select(".conum"):
+                    val = node.get("data-value")
+                    if not val:
+                        txt = node.get_text("", strip=True)
+                        m = re.search(r"(\d+)", txt or "")
+                        if m:
+                            val = m.group(1)
+                    node.clear()
+                    if val:
+                        node["data-value"] = val
+                    node["aria-hidden"] = "true"
+
+                # If a literal "(n)" or "<n>" string follows a .conum, remove it
+                for node in pre.select(".conum"):
+                    sib = node.next_sibling
+                    while isinstance(sib, NavigableString) and not sib.strip():
+                        nxt = sib.next_sibling
+                        sib.extract()
+                        sib = nxt
+                    if isinstance(sib, NavigableString):
+                        new_text = re.sub(r"^\s*(\(\d+\)|<\d+>)", "", str(sib))
+                        if new_text != str(sib):
+                            sib.replace_with(new_text)
+
+                # Strip textual fallbacks in the HTML
+                raw = pre.decode_contents()
+                cleaned = re.sub(r"(?:\s|&nbsp;)*(?:\(\d+\)|<\d+>|&lt;\d+&gt;)", "", raw)
+                if cleaned != raw:
+                    pre.clear()
+                    pre.append(BeautifulSoup(cleaned, self._bs_parser))
+
+
+
+        return str(soup), toc, meta
+
+    def _toc_from_headings(self, headings: List) -> Toc:
         def make_anchor(title: str, hid: str) -> AnchorLink:
             return AnchorLink(title, hid, [])
-
         items: List[AnchorLink] = []
         stack: List[Tuple[int, AnchorLink]] = []
         for h in headings:
@@ -234,89 +413,23 @@ class AsciiDocPlugin(BasePlugin):
             stack.append((level, node))
         return Toc(items)
 
-    def _admonitions_to_material(self, html: str) -> str:
-        soup = BeautifulSoup(html, "html.parser")
-        kinds = {"note", "tip", "important", "caution", "warning"}
-        for blk in soup.select("div.admonitionblock"):
-            classes = set(blk.get("class", []))
-            kind = next((k for k in kinds if k in classes), "note")
-            content = blk.select_one(".content") or blk
-            title_el = content.select_one(".title")
-            title_text = title_el.get_text(" ", strip=True) if title_el else kind.capitalize()
-            if title_el:
-                title_el.extract()
-            new = soup.new_tag("div"); new["class"] = ["admonition", kind]
-            title_p = soup.new_tag("p"); title_p["class"] = ["admonition-title"]; title_p.string = title_text
-            new.append(title_p)
-            for child in list(content.children):
-                new.append(child.extract())
-            blk.replace_with(new)
-        return str(soup)
-
-    def _callout_table_to_ol(self, html: str) -> str:
-        """Rewrite <div class='colist'><table>…</table></div> -> <ol class='colist'>…</ol>."""
-        soup = BeautifulSoup(html, "html.parser")
-        for colist in soup.select("div.colist"):
-            table = colist.find("table")
-            if not table:
-                continue
-            rows = table.find_all("tr")
-            if not rows:
-                continue
-            ol = soup.new_tag("ol", **{"class": "colist"})
-            for tr in rows:
-                tds = tr.find_all("td")
-                if len(tds) < 2:
-                    continue
-                li = soup.new_tag("li")
-                li.append(BeautifulSoup(tds[1].decode_contents(), "html.parser"))
-                ol.append(li)
-            table.replace_with(ol)
-        return str(soup)
-
-    def _strip_conum_from_code(self, html: str) -> str:
-        """
-        Keep visible callout bubbles but prevent copying any numbers:
-        - remove textual fallback nodes (.conum without data-value)
-        - empty real markers (.conum[data-value]) so they add no textContent
-        - strip literal ' (n)' or '<n>' at EOL inside listings
-        """
-        soup = BeautifulSoup(html, "html.parser")
-
-        for pre in soup.select("div.listingblock pre"):
-            for node in pre.select(".conum:not([data-value])"):
-                node.decompose()
-            for node in pre.select(".conum[data-value]"):
-                node.clear()
-                node["aria-hidden"] = "true"
-
-            raw = pre.decode_contents()
-            cleaned = re.sub(r"[ \t]*(\(\d+\)|<\d+>)[ \t]*(?=\n|$)", "", raw, flags=re.M)
-            if cleaned != raw:
-                pre.clear()
-                pre.append(BeautifulSoup(cleaned, "html.parser"))
-
-        return str(soup)
-
-    def _extract_meta_from_html(self, html: str) -> dict:
-        soup = BeautifulSoup(html, "html.parser")
-        meta: dict = {}
-        title_el = soup.find("h1", class_="sect0") or soup.find("h1") or soup.find("title")
-        if title_el:
-            meta["title"] = title_el.get_text(" ", strip=True)
-        desc = soup.find("meta", attrs={"name": "description"})
-        if desc and desc.get("content"):
-            meta["description"] = desc["content"]
-        return meta
-
     # ---------- Helpers ----------
 
-    def _sha1_file(self, path: pathlib.Path) -> str:
-        h = hashlib.sha1()
-        with path.open("rb") as f:
-            for chunk in iter(lambda: f.read(65536), b""):
-                h.update(chunk)
-        return h.hexdigest()
+    def _is_valid_adoc_path(self, p: pathlib.Path) -> bool:
+        try:
+            if not p.exists():
+                return False
+            if p.is_dir():
+                return False
+            return True
+        except OSError:
+            return False
+
+    def _safe_mtime(self, p: pathlib.Path) -> Optional[float]:
+        try:
+            return p.stat().st_mtime
+        except (FileNotFoundError, OSError):
+            return None
 
     def _escape(self, s: str) -> str:
         return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")

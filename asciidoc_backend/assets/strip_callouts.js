@@ -1,8 +1,5 @@
 /* Clean copied code like Antora:
- * - remove Asciidoctor callouts (inline bubbles + trailing "(n)"/"<n>")
- * - for console/terminal blocks, copy only the commands (strip prompts; drop output)
- * Keeps MkDocs Material's “Copied!” feedback intact.
- */
+  */
 (function () {
   const CALLOUT_TAIL = /[ \t]*(\(\d+\)|<\d+>)[ \t]*(?=\n|$)/gm;
 
