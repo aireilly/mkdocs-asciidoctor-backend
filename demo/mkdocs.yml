@@ -44,6 +44,7 @@ plugins:
       safe_mode: safe
       base_dir: docs
       attributes:
+        imagesdir: images
         showtitle: true
         sectanchors: true
         sectlinks: true

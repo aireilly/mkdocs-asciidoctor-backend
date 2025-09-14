@@ -11,5 +11,32 @@ Some text! Yes some text. Some more text.
 $ some code -f
 ----
 
+Something::
+Something something something something something.
+
+And then a table:
+
+.Table title is bold
+[cols="1,2,3", options="header"]
+|===
+|Firefox
+|Web Browser
+|Software
+
+|Ruby
+|Programming Language
+|Language
+
+|TorqueBox
+|Application Server
+|Application
+|===
+
+
+
+.A cat
+image::cat.jpg[A cat, 300px]
+
+
 
 include::snippets/symlink-test.adoc[leveloffset=+1]

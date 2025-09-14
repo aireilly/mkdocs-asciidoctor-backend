@@ -1,6 +1,7 @@
 /* Clean copied code like Antora:
   */
 (function () {
+  // Fixed regex to remove trailing spaces before callouts
   const CALLOUT_TAIL = /[ \t]*(\(\d+\)|<\d+>)[ \t]*(?=\n|$)/gm;
 
   const PROMPTS = [
@@ -54,7 +55,8 @@
       text = commands.join("\n");
     }
 
-    return text.replace(CALLOUT_TAIL, "");
+    // Remove callouts and any trailing whitespace on each line
+    return text.replace(CALLOUT_TAIL, "").replace(/[ \t]+$/gm, "");
   }
 
   function codeForButton(btn) {

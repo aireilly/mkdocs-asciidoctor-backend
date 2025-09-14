@@ -65,6 +65,7 @@ class AsciiDocPlugin(BasePlugin):
         self._safe = self.config["safe_mode"]
         self._attrs = self.config["attributes"] or {}
         self._reqs = self.config["requires"] or []
+        # build behavior
         self._fail = self.config["fail_on_error"]
         self._trace = self.config["trace"]
         self._max_workers = self.config["max_workers"]
@@ -325,6 +326,7 @@ class AsciiDocPlugin(BasePlugin):
                 h["id"] = self._slugify(h.get_text(" ", strip=True))
         toc = self._toc_from_headings(headings)
 
+        # Admonitions -> Material style
         kinds = {"note", "tip", "important", "caution", "warning"}
         for blk in soup.select("div.admonitionblock"):
             classes = set(blk.get("class", []))
@@ -344,6 +346,7 @@ class AsciiDocPlugin(BasePlugin):
                 new.append(child.extract())
             blk.replace_with(new)
 
+        # Callout table -> ordered list
         for colist in soup.select("div.colist"):
             table = colist.find("table")
             if not table:
@@ -361,41 +364,100 @@ class AsciiDocPlugin(BasePlugin):
                 ol.append(li)
             table.replace_with(ol)
 
-            # Callouts in code listings
-            for pre in soup.select("div.listingblock pre"):
-                # Normalize any "(n)" / "<n>" inside .conum to data-value
-                for node in pre.select(".conum"):
-                    val = node.get("data-value")
-                    if not val:
-                        txt = node.get_text("", strip=True)
-                        m = re.search(r"(\d+)", txt or "")
-                        if m:
-                            val = m.group(1)
-                    node.clear()
-                    if val:
-                        node["data-value"] = val
-                    node["aria-hidden"] = "true"
+        # Callouts in code listings (normalize to bubbles, remove text/inline fallbacks)
+        _WS_ONLY = re.compile(r'^[\s\u00A0]+$')                                  # incl. NBSP
+        _CALLOUT_TXT = re.compile(r'^\s*(\(\d+\)|<\d+>|&lt;\d+&gt;)\s*$')
 
-                # If a literal "(n)" or "<n>" string follows a .conum, remove it
-                for node in pre.select(".conum"):
-                    sib = node.next_sibling
-                    while isinstance(sib, NavigableString) and not sib.strip():
-                        nxt = sib.next_sibling
+        for pre in soup.select("div.listingblock pre"):
+            # Normalize .conum content to data-value and hide text
+            for node in pre.select(".conum"):
+                val = node.get("data-value")
+                if not val:
+                    txt = node.get_text("", strip=True)
+                    m = re.search(r"(\d+)", txt or "")
+                    if m:
+                        val = m.group(1)
+                node.clear()
+                if val:
+                    node["data-value"] = val
+                node["aria-hidden"] = "true"
+
+            # Remove a fallback "(n)" or "<n>" that appears immediately after the bubble,
+            # whether as a text node or wrapped in a common inline tag.
+            for node in pre.select(".conum"):
+                sib = node.next_sibling
+
+                # skip whitespace-only text nodes
+                while isinstance(sib, NavigableString) and _WS_ONLY.match(str(sib) or ""):
+                    nxt = sib.next_sibling
+                    sib.extract()
+                    sib = nxt
+                if sib is None:
+                    continue
+
+                if isinstance(sib, NavigableString):
+                    if _CALLOUT_TXT.match(str(sib)):
                         sib.extract()
-                        sib = nxt
-                    if isinstance(sib, NavigableString):
-                        new_text = re.sub(r"^\s*(\(\d+\)|<\d+>)", "", str(sib))
+                    else:
+                        new_text = _CALLOUT_TXT.sub("", str(sib), count=1)
                         if new_text != str(sib):
                             sib.replace_with(new_text)
+                    continue
 
-                # Strip textual fallbacks in the HTML
-                raw = pre.decode_contents()
-                cleaned = re.sub(r"(?:\s|&nbsp;)*(?:\(\d+\)|<\d+>|&lt;\d+&gt;)", "", raw)
-                if cleaned != raw:
-                    pre.clear()
-                    pre.append(BeautifulSoup(cleaned, self._bs_parser))
+                if getattr(sib, "name", None) in {"span", "em", "i", "b", "code", "strong", "small"}:
+                    txt = sib.get_text("", strip=False)
+                    if _CALLOUT_TXT.match(txt):
+                        sib.extract()
+                        continue
+                    # Sometimes split across children; rebuild and test
+                    txt2 = "".join(ch if isinstance(ch, str) else ch.get_text("", strip=False) for ch in sib.contents)
+                    if _CALLOUT_TXT.match(txt2):
+                        sib.extract()
 
+        # Tables: wrap whole Asciidoctor block; move title to <caption>, remove indent
+        for tbl in soup.select("table.tableblock"):
+            block = tbl.find_parent("div", class_="tableblock")
+            title = block.find("div", class_="title") if block else None
 
+            if title and not tbl.find("caption"):
+                cap = soup.new_tag("caption")
+                cap.string = title.get_text(" ", strip=True)
+                tbl.insert(0, cap)
+                title.decompose()
+
+            wrapper = soup.new_tag("div", **{"class": "md-typeset__table"})
+            if block:
+                tbl.extract()
+                wrapper.append(tbl)
+                block.replace_with(wrapper)
+            else:
+                tbl.replace_with(wrapper)
+                wrapper.append(tbl)
+
+        # Figures: convert to <figure> with top figcaption
+        for ib in soup.select("div.imageblock"):
+            title_el = ib.find("div", class_="title")
+            content_el = ib.find("div", class_="content")
+            if not content_el:
+                continue
+
+            fig = soup.new_tag("figure")
+            for cls in (ib.get("class") or []):
+                if cls != "imageblock":
+                    fig["class"] = (fig.get("class") or []) + [cls]
+            fig["class"] = (fig.get("class") or []) + ["adoc-figure"]
+
+            for child in list(content_el.children):
+                fig.append(child.extract())
+
+            if title_el:
+                cap = soup.new_tag("figcaption")
+                cap.string = title_el.get_text(" ", strip=True)
+                fig.insert(0, cap)
+                title_el.decompose()
+
+            content_el.decompose()
+            ib.replace_with(fig)
 
         return str(soup), toc, meta
 

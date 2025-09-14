@@ -67,7 +67,7 @@ To use this UI with Antora, add the following configuration to the playbook file
 ui:
   bundle:
     url: {url-project}/releases/download/{current-release}/ui-bundle.zip # <1>
- calling-birds:
+  calling-birds:
    - huey
    - dewey
    - louie
