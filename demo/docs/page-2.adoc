@@ -1,5 +1,7 @@
+[id="second-page"]
 = Second Page
 
+[id="other-section"]
 == Other Section [[other]]
 
 Content with a diagram:

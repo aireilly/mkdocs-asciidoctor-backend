@@ -54,6 +54,7 @@ class AsciiDocPlugin(BasePlugin):
         self._cache = {}
         self._memo = {}
         self._adoc_pages: Dict[str, pathlib.Path] = {}
+        self._use_dir_urls = bool(config.use_directory_urls)
 
         self._project_dir = pathlib.Path(config.config_file_path).parent.resolve()
         self._docs_dir = pathlib.Path(config.docs_dir).resolve()
@@ -328,20 +329,30 @@ class AsciiDocPlugin(BasePlugin):
 
         # Admonitions -> Material style
         kinds = {"note", "tip", "important", "caution", "warning"}
+        alias = {
+            "caution": "warning",   # yellow/orange
+            "important": "danger",  # red with exclamation
+        }
+
         for blk in soup.select("div.admonitionblock"):
             classes = set(blk.get("class", []))
             kind = next((k for k in kinds if k in classes), "note")
+            material_kind = alias.get(kind, kind)
+
             content = blk.select_one(".content") or blk
             title_el2 = content.select_one(".title")
             title_text = title_el2.get_text(" ", strip=True) if title_el2 else kind.capitalize()
             if title_el2:
                 title_el2.extract()
+
             new = soup.new_tag("div")
-            new["class"] = ["admonition", kind]
+            new["class"] = ["admonition", material_kind]
+
             title_p = soup.new_tag("p")
             title_p["class"] = ["admonition-title"]
             title_p.string = title_text
             new.append(title_p)
+
             for child in list(content.children):
                 new.append(child.extract())
             blk.replace_with(new)
@@ -458,6 +469,34 @@ class AsciiDocPlugin(BasePlugin):
 
             content_el.decompose()
             ib.replace_with(fig)
+
+        # ---- Fix xref URLs to match MkDocs routing
+        def _to_dir_url(href: str) -> str:
+            # keep externals and fragments
+            if not href or href.startswith(("#", "http://", "https://", "mailto:", "tel:")):
+                return href
+            # turn *.adoc into *.html (no dir-urls)
+            if not self._use_dir_urls:
+                return re.sub(r"(?<=^|/)([^/#?]+)\.adoc(?=($|[#?]))", r"\1.html", href)
+            # dir-urls: *.html -> */  and */index.html -> */
+            path, frag = (href.split("#", 1) + [""])[:2]
+            path_q, query = (path.split("?", 1) + [""])[:2]
+            path_only = path_q
+            if path_only.endswith("/index.html"):
+                path_only = path_only[:-len("index.html")]
+            elif path_only.endswith(".html"):
+                path_only = path_only[:-len(".html")] + "/"
+            elif path_only.endswith(".adoc"):
+                path_only = path_only[:-len(".adoc")] + "/"
+            new = path_only
+            if query:
+                new += "?" + query
+            if frag:
+                new += "#" + frag
+            return new
+
+        for a in soup.find_all("a", href=True):
+            a["href"] = _to_dir_url(a["href"])
 
         return str(soup), toc, meta
 

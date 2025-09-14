@@ -7,28 +7,29 @@ theme:
   name: material
   features:
     - content.action.edit
+    - content.code.annotate
+    - content.code.copy
+    - content.code.select
+    - navigation.footer
     - navigation.top
     - navigation.tracking
-    - navigation.footer
+    - palette.toggle
+    - search.highlight
+    - search.suggest
     - toc.follow
     - toc.sticky
-    - search.suggest
-    - search.highlight
-    - content.code.copy
-    - content.code.annotate
-    - palette.toggle
   palette:
     - scheme: default
       primary: indigo
       accent: indigo
       toggle:
-        icon: material/weather-night
+        icon: material/toggle-switch-off-outline
         name: Switch to dark mode
     - scheme: slate
       primary: indigo
       accent: indigo
       toggle:
-        icon: material/weather-sunny
+        icon: material/toggle-switch
         name: Switch to light mode
 
 exclude_docs: |

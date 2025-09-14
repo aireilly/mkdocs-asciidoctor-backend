@@ -42,7 +42,7 @@
   text-align: left;
 }
 
-/* Optional: caption like Material */
+/* Captions like Material */
 .md-typeset .md-typeset__table table.tableblock > caption {
   caption-side: top;
   text-align: left;
