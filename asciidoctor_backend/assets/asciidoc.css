@@ -129,3 +129,10 @@
 .md-content div.title {
   font-weight: 600;
 }
+
+/* Restore original capitalization for navigation items */
+.md-nav__item .md-nav__link,
+.md-nav__item .md-nav__link--active,
+.md-nav__title {
+  text-transform: none !important;
+}
