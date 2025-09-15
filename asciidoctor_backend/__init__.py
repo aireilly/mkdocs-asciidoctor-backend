@@ -544,33 +544,71 @@ class AsciiDoctorPlugin(BasePlugin):
         for a in soup.find_all("a", href=True):
             a["href"] = _to_dir_url(a["href"])
 
-        # ---- Move include-edit markers into headings and render Material's pencil icon
+        # ---- Move include-edit markers into headings and render Material's edit icon
         if getattr(self, "_edit_includes", False) and self._edit_base_url:
             markers = list(soup.select("span.adoc-include-edit[data-edit]"))
+
+            # Prevent duplicates when multiple markers map to the same heading/href
+            seen = set()  # (id(heading), href)
+
             for marker in markers:
                 href = marker.get("data-edit")
                 if not href:
                     marker.decompose()
                     continue
+
+                # Find nearest section ancestor and its OWN heading
                 sect = marker.find_parent(
-                    lambda t: hasattr(t, "get") and "class" in t.attrs and any(str(c).startswith("sect") for c in t["class"])
+                    lambda t: hasattr(t, "get")
+                    and "class" in t.attrs
+                    and any(str(c).startswith("sect") for c in t["class"])
                 )
-                h = sect.find(re.compile(r"^h[1-6]$")) if sect else None
-                if not h:
-                    # fallback: nearest previous heading
+
+                h = None
+                if sect:
+                    # Only direct children of the section, not nested descendants
+                    h = sect.find(re.compile(r"^h[1-6]$"), recursive=False)
+                    if h is None:
+                        # Fallback: scan direct children for a heading element
+                        for child in sect.children:
+                            if getattr(child, "name", "") in {"h1","h2","h3","h4","h5","h6"}:
+                                h = child
+                                break
+
+                if h is None:
+                    # Last resort: nearest previous heading in document order
                     for prev in marker.previous_elements:
-                        if getattr(prev, "name", "") in {"h1", "h2", "h3", "h4", "h5", "h6"}:
+                        if getattr(prev, "name", "") in {"h1","h2","h3","h4","h5","h6"}:
                             h = prev
                             break
-                if not h:
+
+                if h is None:
                     marker.decompose()
                     continue
 
-                a = soup.new_tag("a", href=href,
-                                 **{"class": "md-content__button md-icon adoc-edit-include",
-                                    "title": "Edit included file", "target": "_blank", "rel": "noopener"})
+                # De-dupe: don't add the same href to the same heading twice
+                key = (id(h), href)
+                if key in seen or h.select_one(f'a.adoc-edit-include[href="{href}"]'):
+                    marker.decompose()
+                    continue
+                seen.add(key)
+
+                a = soup.new_tag(
+                    "a",
+                    href=href,
+                    **{
+                        "class": "md-content__button md-icon adoc-edit-include",
+                        "title": "Edit included file",
+                        "target": "_blank",
+                        "rel": "noopener",
+                    },
+                )
                 svg = BeautifulSoup(
-                    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"></path></svg>', self._bs_parser)
+                    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">'
+                    '<path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"></path>'
+                    "</svg>",
+                    self._bs_parser,
+                )
                 a.append(svg)
                 h.append(a)
                 marker.decompose()
