@@ -17,7 +17,9 @@ Asciidoctor attributes can be injected via the `mkdocs.yml`.
 pip install mkdocs-material
 ```
 
-The following example `mkdocs.yml` can be dropped into the root of an existing AsciiDoc project:
+The following example `mkdocs.yml` can be dropped into the root of an existing AsciiDoc project. 
+
+AsciiDoc must be in the MkDocs default `docs/` folder.
 
 ```yaml
 site_name: Example
