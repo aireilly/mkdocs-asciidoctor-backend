@@ -16,3 +16,5 @@ python -m mkdocs build -f demo/mkdocs.yml -v \
 && python -m mkdocs serve -f demo/mkdocs.yml
 ```
 
+
+Demo build: https://aireilly.github.io/mkdocs-asciidoctor-backend/
