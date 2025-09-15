@@ -1,14 +1,9 @@
 [id="second-page"]
 = Second Page
 
+A line.
+
 [id="other-section"]
-== Other Section [[other]]
+== Other Section
 
-Content with a diagram:
-
-[plantuml, diag-1, format=svg]
-----
-@startuml
-Alice -> Bob : Hi
-@enduml
-----
+Some Content.

@@ -124,3 +124,8 @@
   max-width: 100%;
   height: auto;
 }
+
+/* Make Asciidoctor block titles bold */
+.md-content div.title {
+  font-weight: 600;
+}

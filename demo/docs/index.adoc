@@ -1,12 +1,11 @@
 = Demo
 :page-nav: true
 
+This is a demo site with lots of meaningless text.
+
 == Intro
 
 A link to <<anchors,anchors>> and xref:page-2.adoc#other-section[other page].
-
-[NOTE]
-This is an admonition.
 
 include::snippets/_snippet.adoc[]
 

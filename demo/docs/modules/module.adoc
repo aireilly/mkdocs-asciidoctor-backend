@@ -37,12 +37,7 @@ $ echo "code in a tip"
 ----
 ====
 
-[WARNING]
-====
-This is a warning!
-====
-
-Something::
+A definition list::
 Something something something something something.
 
 And then a table:
