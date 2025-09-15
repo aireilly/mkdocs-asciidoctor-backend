@@ -71,13 +71,7 @@ class AsciiDoctorPlugin(BasePlugin):
         self._max_workers = self.config["max_workers"]
         self._ignore_missing = self.config["ignore_missing"]
 
-        # Fastest BS parser available
         self._bs_parser = "html.parser"
-        try:
-            import lxml  # noqa: F401
-            self._bs_parser = "lxml"
-        except Exception:
-            pass
 
         # Packaged assets
         assets = resources.files(__package__) / "assets"
