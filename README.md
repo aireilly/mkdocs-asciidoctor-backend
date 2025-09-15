@@ -2,6 +2,9 @@
 
 Use AsciiDoc with Material for MkDocs.
 
+> [!IMPORTANT]
+> This is a very early Alpha release and not suitable for production
+
 This MkDocs plugin replaces the MkDocs default Markdown processor with [Asciidoctor](https://asciidoctor.org/) for AsciiDoc files, allowing you to write documentation in AsciiDoc while keeping full compatibility with Material for MkDocs. 
 
 It runs the Ruby Asciidoctor CLI to render `*.adoc` files, normalizes the output HTML with BeautifulSoup, and adjusts it to match MkDocs conventions.
@@ -17,9 +20,12 @@ Asciidoctor attributes can be injected via the `mkdocs.yml`.
 pip install mkdocs-material
 ```
 
-The following example `mkdocs.yml` can be dropped into the root of an existing AsciiDoc project. 
+> [!NOTE]
+>
+> MkDocs expects docs source in a `docs/` folder.
+> You should also set up a `nav` element in the `mkdocs.yml`, and optionally a root `docs/index.adoc` file.
 
-AsciiDoc must be in the MkDocs default `docs/` folder.
+The following example `mkdocs.yml` can be dropped into the root of an existing AsciiDoc project. 
 
 ```yaml
 site_name: Example
@@ -79,6 +85,7 @@ plugins:
         idseparator: "-"
         outfilesuffix: .html
         source-highlighter: rouge
+        "!toc": "" # Optional: unset the TOC
 ```
 
 Start the server:

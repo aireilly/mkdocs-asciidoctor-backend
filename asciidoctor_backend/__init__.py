@@ -1,21 +1,24 @@
 # asciidoctor_backend/__init__.py
 import os
 import pathlib
-import subprocess
 import re
+import subprocess
 from dataclasses import dataclass
-from typing import Dict, Optional, Tuple, List
+from typing import Dict, List, Optional, Tuple
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from bs4 import BeautifulSoup, NavigableString
 from importlib import resources
-from mkdocs.plugins import BasePlugin
 from mkdocs.config import config_options
 from mkdocs.config.defaults import MkDocsConfig
-from mkdocs.structure.files import Files, File
+from mkdocs.plugins import BasePlugin
+from mkdocs.structure.files import File, Files
 from mkdocs.structure.pages import Page
-from mkdocs.structure.toc import TableOfContents as Toc, AnchorLink  # MkDocs 1.6+
+from mkdocs.structure.toc import AnchorLink
+from mkdocs.structure.toc import TableOfContents as Toc  # MkDocs 1.6+
 
+
+# ---------- Data types ----------
 
 @dataclass
 class Rendered:
@@ -24,13 +27,17 @@ class Rendered:
     meta: dict
 
 
+# ---------- Plugin ----------
+
 class AsciiDoctorPlugin(BasePlugin):
     """
     AsciiDoc backend for MkDocs 1.6+
     - Renders .adoc via Asciidoctor (content-only)
     - Injects HTML/TOC/meta
-    - Ships CSS, copy-cleaner JS, and a small RB edit extension
+    - Ships CSS, copy-cleaner JS, and a small Ruby helper for "edit include" links
     """
+
+    # User-facing configuration
     config_scheme = (
         ("asciidoctor_cmd", config_options.Type(str, default="asciidoctor")),
         ("safe_mode", config_options.Choice(["unsafe", "safe", "server", "secure"], default="safe")),
@@ -41,27 +48,31 @@ class AsciiDoctorPlugin(BasePlugin):
         ("trace", config_options.Type(bool, default=False)),
         ("max_workers", config_options.Type(int, default=8)),
         ("ignore_missing", config_options.Type(bool, default=False)),
+        # Edit-includes feature
         ("edit_includes", config_options.Type(bool, default=False)),
         ("edit_base_url", config_options.Type(str, default="")),
         ("repo_root", config_options.Type(str, default=None)),
     )
 
-    # (mtime, Rendered)
-    _cache: Dict[str, Tuple[float, Rendered]]
-    _memo: Dict[str, Rendered]  # Per-build memo
+    # Caches
+    _cache: Dict[str, Tuple[float, Rendered]]  # (mtime, Rendered)
+    _memo: Dict[str, Rendered]                 # per-build memo of Rendered
+    _adoc_pages: Dict[str, pathlib.Path]       # src_uri -> absolute path
+
+    # ---------- MkDocs lifecycle ----------
 
     def on_config(self, config: MkDocsConfig):
+        # Runtime state
         self._cache = {}
         self._memo = {}
-        self._adoc_pages: Dict[str, pathlib.Path] = {}
+        self._adoc_pages = {}
         self._use_dir_urls = bool(config.use_directory_urls)
 
+        # Project paths
         self._project_dir = pathlib.Path(config.config_file_path).parent.resolve()
         self._docs_dir = pathlib.Path(config.docs_dir).resolve()
 
-        base_dir_opt = self.config.get("base_dir")
-        self._base_dir = (self._project_dir / base_dir_opt).resolve() if base_dir_opt else self._docs_dir
-
+        # Asciidoctor command + options
         self._cmd = self.config["asciidoctor_cmd"]
         self._safe = self.config["safe_mode"]
         self._attrs = self.config["attributes"] or {}
@@ -71,6 +82,11 @@ class AsciiDoctorPlugin(BasePlugin):
         self._max_workers = self.config["max_workers"]
         self._ignore_missing = self.config["ignore_missing"]
 
+        # Asciidoctor base dir
+        base_dir_opt = self.config.get("base_dir")
+        self._base_dir = (self._project_dir / base_dir_opt).resolve() if base_dir_opt else self._docs_dir
+
+        # BeautifulSoup parser (keep it simple; no lxml)
         self._bs_parser = "html.parser"
 
         # Packaged assets
@@ -80,29 +96,30 @@ class AsciiDoctorPlugin(BasePlugin):
         self._pkg_css_href = "assets/asciidoc.css"
         self._pkg_js_href = "assets/strip_callouts.js"
 
-        # Ruby helper for include edit markers
+        # Ruby helper for include-edit markers
         self._ruby_inc_helper_res = assets / "include_edit.rb"
 
-        # --- Edit-includes wiring (prefer repo_url + edit_uri)
+        # Edit-includes wiring (prefer repo_url + edit_uri)
         self._edit_includes = bool(self.config.get("edit_includes", False))
         self._edit_base_url = ""
-        self._repo_root = self._project_dir  # temporary default; will auto-detect Git root below
+        self._repo_root = self._project_dir  # default; auto-detect git root below
 
         if self._edit_includes:
-            base = (config.repo_url or "").rstrip("/") if getattr(config, "repo_url", None) else ""
+            base = (getattr(config, "repo_url", "") or "").rstrip("/")
             edit_uri = (getattr(config, "edit_uri", "") or "").lstrip("/")
             override = (self.config.get("edit_base_url") or "").strip()
+
             if base and edit_uri:
                 self._edit_base_url = f"{base}/{edit_uri}".rstrip("/") + "/"
             elif override:
                 self._edit_base_url = override.rstrip("/") + "/"
 
-            # Repo root selection
             repo_root_opt = self.config.get("repo_root")
-            if repo_root_opt:
-                self._repo_root = pathlib.Path(repo_root_opt).resolve()
-            else:
-                self._repo_root = self._discover_git_root(self._project_dir) or self._project_dir
+            self._repo_root = (
+                pathlib.Path(repo_root_opt).resolve()
+                if repo_root_opt
+                else self._discover_git_root(self._project_dir) or self._project_dir
+            )
 
             if self._edit_base_url:
                 self._attrs["edit-base"] = self._edit_base_url
@@ -111,32 +128,22 @@ class AsciiDoctorPlugin(BasePlugin):
                 # No valid base: disable feature silently
                 self._edit_includes = False
 
-        # Auto-include into the theme (keeps MkDocs/Material CSS intact)
+        # Ensure our CSS/JS are included
         config.extra_css.append(self._pkg_css_href)
         config.extra_javascript.append(self._pkg_js_href)
         return config
 
-    def _discover_git_root(self, start: pathlib.Path) -> Optional[pathlib.Path]:
-        """Walk upward from `start` to find a directory containing .git. Return the path or None."""
-        p = start
-        try:
-            for candidate in [p, *p.parents]:
-                if (candidate / ".git").exists():
-                    return candidate.resolve()
-        except Exception:
-            pass
-        return None
-
     def on_files(self, files: Files, config: MkDocsConfig) -> Files:
+        """Register .adoc pages and prune broken files if requested."""
         src_dir = pathlib.Path(config.docs_dir).resolve()
         site_dir = pathlib.Path(config.site_dir)
 
-        # Remove .adoc that MkDocs may have treated as media
+        # Remove .adoc files that MkDocs may have detected as static
         for f in list(files):
             if f.src_path.endswith(".adoc"):
                 files.remove(f)
 
-        # Remove only those missing/broken files that belong to docs_dir
+        # Optionally remove missing files that belong to docs_dir
         if self._ignore_missing:
             for f in list(files):
                 try:
@@ -145,14 +152,16 @@ class AsciiDoctorPlugin(BasePlugin):
                     continue
                 if base != src_dir:
                     continue
-                abs_src = pathlib.Path(getattr(f, "abs_src_path", "")) if getattr(f, "abs_src_path", None) else (base / f.src_path)
+                abs_src = (
+                    pathlib.Path(getattr(f, "abs_src_path", "")) if getattr(f, "abs_src_path", None) else (base / f.src_path)
+                )
                 try:
                     if (not abs_src.exists()) or abs_src.is_dir():
                         files.remove(f)
                 except OSError:
                     files.remove(f)
 
-        # Add .adoc as documentation pages (exclude common partials)
+        # Add .adoc as documentation pages (exclude partials)
         for p in src_dir.rglob("*.adoc"):
             if not self._is_valid_adoc_path(p):
                 continue
@@ -160,17 +169,12 @@ class AsciiDoctorPlugin(BasePlugin):
             if rel.startswith(("partials/", "snippets/", "modules/")):
                 continue
 
-            f = File(
-                rel,
-                src_dir=str(src_dir),
-                dest_dir=config.site_dir,
-                use_directory_urls=config.use_directory_urls,
-            )
+            f = File(rel, src_dir=str(src_dir), dest_dir=config.site_dir, use_directory_urls=config.use_directory_urls)
             f.is_documentation_page = (lambda f=f: True)  # MkDocs 1.6
 
             self._adoc_pages[rel] = p
 
-            # Compute dest_path + url like Markdown pages
+            # Compute dest_path + url (mirror Markdown behavior)
             src = pathlib.Path(f.src_path)
             stem, parent = src.stem, src.parent.as_posix()
 
@@ -187,9 +191,11 @@ class AsciiDoctorPlugin(BasePlugin):
                         dest_path, url = f"{parent}/{stem}/index.html", f"{parent}/{stem}/"
                 else:
                     if parent in ("", "."):
-                        dest_path = f"{stem}.html"; url = dest_path
+                        dest_path = f"{stem}.html"
+                        url = dest_path
                     else:
-                        dest_path = f"{parent}/{stem}.html"; url = dest_path
+                        dest_path = f"{parent}/{stem}.html"
+                        url = dest_path
 
             f.dest_path = dest_path
             f.abs_dest_path = str(site_dir / dest_path)
@@ -199,6 +205,7 @@ class AsciiDoctorPlugin(BasePlugin):
         return files
 
     def on_nav(self, nav, config: MkDocsConfig, files: Files):
+        """Render (or re-render) needed .adoc sources upfront (cache-aware)."""
         self._memo = {}
         to_build: List[pathlib.Path] = []
 
@@ -237,14 +244,13 @@ class AsciiDoctorPlugin(BasePlugin):
     def on_post_build(self, config: MkDocsConfig):
         """Write packaged CSS/JS into site/ so extra_css/extra_javascript resolve."""
         site_dir = pathlib.Path(config.site_dir)
-        for res, href in ((self._pkg_css_res, self._pkg_css_href),
-                          (self._pkg_js_res,  self._pkg_js_href)):
+        for res, href in ((self._pkg_css_res, self._pkg_css_href), (self._pkg_js_res, self._pkg_js_href)):
             out = site_dir / href
             out.parent.mkdir(parents=True, exist_ok=True)
             with resources.as_file(res) as src_path:
                 out.write_bytes(pathlib.Path(src_path).read_bytes())
 
-    # ---------- Page pipeline ----------
+    # ---------- Page hooks ----------
 
     def _is_adoc_page(self, page: Page) -> bool:
         return page.file.src_uri in self._adoc_pages
@@ -271,7 +277,7 @@ class AsciiDoctorPlugin(BasePlugin):
         page.toc = rendered.toc
         return rendered.html
 
-    # ---------- Internals ----------
+    # ---------- Render helpers ----------
 
     def _render_adoc_cached(self, src_path: pathlib.Path) -> Rendered:
         key = str(src_path)
@@ -326,8 +332,7 @@ class AsciiDoctorPlugin(BasePlugin):
                 with resources.as_file(self._ruby_inc_helper_res) as helper_path:
                     args.extend(["-r", str(helper_path)])
             except FileNotFoundError:
-                # Helper missing from package; continue without markers
-                pass
+                pass  # helper missing; continue without markers
 
         try:
             proc = subprocess.run(args, check=True, capture_output=True)
@@ -340,22 +345,19 @@ class AsciiDoctorPlugin(BasePlugin):
         except subprocess.CalledProcessError as e:
             stderr = e.stderr.decode("utf-8", errors="ignore")
             if self._ignore_missing or not self._fail:
-                if any(s in stderr.lower() for s in (
-                    "no such file or directory",
-                    "include file not found",
-                    "enoent",
-                    "cannot open",
-                )):
+                if any(s in stderr.lower() for s in ("no such file or directory", "include file not found", "enoent", "cannot open")):
                     return (
                         f"<pre>{self._escape(f'Asciidoctor warning for {src} (missing content ignored):')}\n"
                         f"{self._escape(stderr)}</pre>"
                     )
             raise SystemExit(f"Asciidoctor failed for {src}:\n{stderr}")
 
-    # Build ToC + rewrites + meta in a single pass
+    # ---------- HTML post-processing ----------
+
     def _postprocess_once(self, html: str) -> Tuple[str, Toc, dict]:
         soup = BeautifulSoup(html, self._bs_parser)
 
+        # Meta
         meta: dict = {}
         title_el = soup.find("h1", class_="sect0") or soup.find("h1") or soup.find("title")
         if title_el:
@@ -364,10 +366,8 @@ class AsciiDoctorPlugin(BasePlugin):
         if desc and desc.get("content"):
             meta["description"] = desc["content"]
 
-        headings = [
-            h for h in soup.find_all(["h1", "h2", "h3", "h4", "h5", "h6"])
-            if not (h.name == "h1" and "sect0" in (h.get("class") or []))
-        ]
+        # IDs + ToC
+        headings = [h for h in soup.find_all(["h1", "h2", "h3", "h4", "h5", "h6"]) if not (h.name == "h1" and "sect0" in (h.get("class") or []))]
         for h in headings:
             if not h.get("id"):
                 h["id"] = self._slugify(h.get_text(" ", strip=True))
@@ -375,10 +375,7 @@ class AsciiDoctorPlugin(BasePlugin):
 
         # Admonitions -> Material style
         kinds = {"note", "tip", "important", "caution", "warning"}
-        alias = {
-            "caution": "warning",   # yellow/orange
-            "important": "danger",  # red with exclamation
-        }
+        alias = {"caution": "warning", "important": "danger"}  # color intent
 
         for blk in soup.select("div.admonitionblock"):
             classes = set(blk.get("class", []))
@@ -421,12 +418,12 @@ class AsciiDoctorPlugin(BasePlugin):
                 ol.append(li)
             table.replace_with(ol)
 
-        # Callouts in code listings (normalize to bubbles, remove text/inline fallbacks)
-        _WS_ONLY = re.compile(r'^[\s\u00A0]+$')                                  # incl. NBSP
-        _CALLOUT_TXT = re.compile(r'^\s*(\(\d+\)|<\d+>|&lt;\d+&gt;)\s*$')
+        # Callouts in code listings
+        _WS_ONLY = re.compile(r"^[\s\u00A0]+$")  # incl. NBSP
+        _CALLOUT_TXT = re.compile(r"^\s*(\(\d+\)|<\d+>|&lt;\d+&gt;)\s*$")
 
         for pre in soup.select("div.listingblock pre"):
-            # Normalize .conum content to data-value and hide text
+            # Normalize the bubble nodes
             for node in pre.select(".conum"):
                 val = node.get("data-value")
                 if not val:
@@ -439,7 +436,7 @@ class AsciiDoctorPlugin(BasePlugin):
                     node["data-value"] = val
                 node["aria-hidden"] = "true"
 
-            # Remove a fallback "(n)" or "<n>" immediately after the bubble
+            # Remove textual fallback after the bubble
             for node in pre.select(".conum"):
                 sib = node.next_sibling
                 while isinstance(sib, NavigableString) and _WS_ONLY.match(str(sib) or ""):
@@ -465,7 +462,7 @@ class AsciiDoctorPlugin(BasePlugin):
                     if _CALLOUT_TXT.match(txt2):
                         sib.extract()
 
-        # Tables: wrap whole Asciidoctor block; move title to <caption>, remove indent
+        # Tables: wrap block and move title to <caption>
         for tbl in soup.select("table.tableblock"):
             block = tbl.find_parent("div", class_="tableblock")
             title = block.find("div", class_="title") if block else None
@@ -485,7 +482,7 @@ class AsciiDoctorPlugin(BasePlugin):
                 tbl.replace_with(wrapper)
                 wrapper.append(tbl)
 
-        # Figures: convert to <figure> with top figcaption
+        # Figures -> <figure> + top figcaption
         for ib in soup.select("div.imageblock"):
             title_el = ib.find("div", class_="title")
             content_el = ib.find("div", class_="content")
@@ -510,15 +507,14 @@ class AsciiDoctorPlugin(BasePlugin):
             content_el.decompose()
             ib.replace_with(fig)
 
-        # ---- Fix xref URLs to match MkDocs routing
+        # Fix xref URLs to match MkDocs routing
         def _to_dir_url(href: str) -> str:
-            # keep externals and fragments
             if not href or href.startswith(("#", "http://", "https://", "mailto:", "tel:")):
                 return href
-            # turn *.adoc into *.html (no dir-urls)
             if not self._use_dir_urls:
-                return re.sub(r"(?<=^|/)([^/#?]+)\.adoc(?=($|[#?]))", r"\1.html", href)
-            # dir-urls: *.html -> */  and */index.html -> */
+                # replace ".../name.adoc" -> ".../name.html"
+                return re.sub(r"(^|/)([^/#?]+)\.adoc(?=($|[#?]))", r"\1\2.html", href)
+            # dir-urls
             path, frag = (href.split("#", 1) + [""])[:2]
             path_q, query = (path.split("?", 1) + [""])[:2]
             path_only = path_q
@@ -538,12 +534,10 @@ class AsciiDoctorPlugin(BasePlugin):
         for a in soup.find_all("a", href=True):
             a["href"] = _to_dir_url(a["href"])
 
-        # ---- Move include-edit markers into headings and render Material's edit icon
+        # Move include-edit markers into headings and render edit icon
         if getattr(self, "_edit_includes", False) and self._edit_base_url:
             markers = list(soup.select("span.adoc-include-edit[data-edit]"))
-
-            # Prevent duplicates when multiple markers map to the same heading/href
-            seen = set()  # (id(heading), href)
+            seen: set = set()  # (id(heading), href)
 
             for marker in markers:
                 href = marker.get("data-edit")
@@ -551,41 +545,38 @@ class AsciiDoctorPlugin(BasePlugin):
                     marker.decompose()
                     continue
 
-                # Find nearest section ancestor and its OWN heading
                 sect = marker.find_parent(
-                    lambda t: hasattr(t, "get")
-                    and "class" in t.attrs
-                    and any(str(c).startswith("sect") for c in t["class"])
+                    lambda t: hasattr(t, "get") and "class" in t.attrs and any(str(c).startswith("sect") for c in t["class"])
                 )
 
                 h = None
                 if sect:
-                    # Only direct children of the section, not nested descendants
                     h = sect.find(re.compile(r"^h[1-6]$"), recursive=False)
                     if h is None:
-                        # Fallback: scan direct children for a heading element
                         for child in sect.children:
-                            if getattr(child, "name", "") in {"h1","h2","h3","h4","h5","h6"}:
+                            if getattr(child, "name", "") in {"h1", "h2", "h3", "h4", "h5", "h6"}:
                                 h = child
                                 break
-
                 if h is None:
-                    # Last resort: nearest previous heading in document order
                     for prev in marker.previous_elements:
-                        if getattr(prev, "name", "") in {"h1","h2","h3","h4","h5","h6"}:
+                        if getattr(prev, "name", "") in {"h1", "h2", "h3", "h4", "h5", "h6"}:
                             h = prev
                             break
-
                 if h is None:
                     marker.decompose()
                     continue
 
-                # De-dupe: don't add the same href to the same heading twice
                 key = (id(h), href)
                 if key in seen or h.select_one(f'a.adoc-edit-include[href="{href}"]'):
                     marker.decompose()
                     continue
                 seen.add(key)
+
+                if "class" in h.attrs:
+                    if "adoc-flex" not in h["class"]:
+                        h["class"].append("adoc-flex")
+                else:
+                    h["class"] = ["adoc-flex"]
 
                 a = soup.new_tag(
                     "a",
@@ -623,7 +614,18 @@ class AsciiDoctorPlugin(BasePlugin):
             stack.append((level, node))
         return Toc(items)
 
-    # ---------- Helpers ----------
+    # ---------- Utilities ----------
+
+    def _discover_git_root(self, start: pathlib.Path) -> Optional[pathlib.Path]:
+        """Walk upward from `start` to find a directory containing .git. Return the path or None."""
+        p = start
+        try:
+            for candidate in [p, *p.parents]:
+                if (candidate / ".git").exists():
+                    return candidate.resolve()
+        except Exception:
+            pass
+        return None
 
     def _is_valid_adoc_path(self, p: pathlib.Path) -> bool:
         try:

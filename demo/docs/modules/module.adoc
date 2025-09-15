@@ -1,6 +1,6 @@
 :_mod-docs-content-type: CONCEPT
 [id="REPLACE_ME_WITH_ID"]
-= This is a concept module
+= Setting up a mirror registry for your disconnected OpenShift environment
 In the title of concept modules, include nouns or noun phrases that are used in the body text. This helps readers and search engines find the information quickly. Do not start the title of concept modules with a verb.
 
 Some text! Yes some text. Some more text.
