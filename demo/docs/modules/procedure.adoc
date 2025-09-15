@@ -1,0 +1,34 @@
+:_mod-docs-content-type: PROCEDURE
+[id="procedure"]
+= A procedure
+
+Do something.
+
+.Prerequisites
+
+* You have installed the OpenShift CLI (`oc`).
+
+* You have logged in as a user with `cluster-admin` privileges.
+
+.Procedure
+
+. Unwrap the thing.
+
+. Build the thing.
++
+[source,terminal]
+----
+$ build thing
+----
++
+.Example output
+[source,terminal]
+----
+succeeded!
+----
+
+. Release the thing.
+
+.Verification
+
+Verify the thing by looking at it.

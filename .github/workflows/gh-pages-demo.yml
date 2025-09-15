@@ -35,8 +35,8 @@ jobs:
           ruby-version: "3.2"
           bundler-cache: false
 
-      - name: Install Asciidoctor (Ruby)
-        run: gem install --no-document asciidoctor
+      - name: Install Asciidoctor + Rouge
+        run: gem install --no-document asciidoctor rouge
 
       - name: Install Python deps
         run: |

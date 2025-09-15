@@ -3,7 +3,7 @@
 
 == Intro
 
-A link to <<anchors,anchors>> and xref:page-2.adoc#other[other page].
+A link to <<anchors,anchors>> and xref:page-2.adoc#other-section[other page].
 
 [NOTE]
 This is an admonition.
@@ -11,6 +11,8 @@ This is an admonition.
 include::snippets/_snippet.adoc[]
 
 include::modules/module.adoc[leveloffset=+1]
+
+include::modules/procedure.adoc[leveloffset=+2]
 
 == anchors
 

@@ -48,7 +48,7 @@ class AsciiDoctorPlugin(BasePlugin):
 
     # (mtime, Rendered)
     _cache: Dict[str, Tuple[float, Rendered]]
-    _memo: Dict[str, Rendered]  # per-build memo
+    _memo: Dict[str, Rendered]  # Per-build memo
 
     def on_config(self, config: MkDocsConfig):
         self._cache = {}
@@ -82,9 +82,9 @@ class AsciiDoctorPlugin(BasePlugin):
         # Packaged assets
         assets = resources.files(__package__) / "assets"
         self._pkg_css_res = assets / "asciidoc.css"
-        self._pkg_js_res  = assets / "strip_callouts.js"
+        self._pkg_js_res = assets / "strip_callouts.js"
         self._pkg_css_href = "assets/asciidoc.css"
-        self._pkg_js_href  = "assets/strip_callouts.js"
+        self._pkg_js_href = "assets/strip_callouts.js"
 
         # Ruby helper for include edit markers
         self._ruby_inc_helper_res = assets / "include_edit.rb"
@@ -103,10 +103,7 @@ class AsciiDoctorPlugin(BasePlugin):
             elif override:
                 self._edit_base_url = override.rstrip("/") + "/"
 
-            # Repo root selection:
-            # 1) explicit plugin setting wins
-            # 2) else try to discover Git root by walking up to a directory that contains .git
-            # 3) fall back to MkDocs project dir
+            # Repo root selection
             repo_root_opt = self.config.get("repo_root")
             if repo_root_opt:
                 self._repo_root = pathlib.Path(repo_root_opt).resolve()
@@ -117,7 +114,7 @@ class AsciiDoctorPlugin(BasePlugin):
                 self._attrs["edit-base"] = self._edit_base_url
                 self._attrs["repo-root"] = str(self._repo_root)
             else:
-                # no valid base → disable feature silently
+                # No valid base: disable feature silently
                 self._edit_includes = False
 
         # Auto-include into the theme (keeps MkDocs/Material CSS intact)
