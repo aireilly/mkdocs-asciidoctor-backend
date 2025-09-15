@@ -9,16 +9,64 @@ The plugin ships some CSS/JS/RB and optionally injects "edit this page" links fo
 
 Supports hot reload on the development server for all AsciiDoc source files  when writing.
 
-Asciidoctor attributes can be injected via the `mkdocs.yml`:
+Asciidoctor attributes can be injected via the `mkdocs.yml`.
+
+## Installing
+
+```cmd
+pip install mkdocs-material
+```
+
+The following example `mkdocs.yml` can be dropped into the root of an existing AsciiDoc project:
 
 ```yaml
+site_name: Example
+repo_url: https://github.com/example/repo
+repo_name: example-repo
+edit_uri: edit/main/
+
+theme:
+  name: material
+  features:
+    - content.action.edit
+    - content.code.annotate
+    - content.code.copy
+    - content.code.select
+    - navigation.footer
+    - navigation.top
+    - navigation.tracking
+    - palette.toggle
+    - search.highlight
+    - search.suggest
+    - toc.follow
+    - toc.sticky
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/toggle-switch-off-outline
+        name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/toggle-switch
+        name: Switch to light mode
+
+exclude_docs: |
+  partials/**
+  snippets/**
+  modules/**
+
 plugins:
+  - search
   - asciidoctor_backend:
       edit_includes: true
       fail_on_error: false
       ignore_missing: true
       safe_mode: safe
-      base_dir: docs
+      base_dir: .
       attributes:
         imagesdir: images
         showtitle: true
@@ -30,23 +78,3 @@ plugins:
         outfilesuffix: .html
         source-highlighter: rouge
 ```
-
-Get hacking:
-
-```cmd
-# From project root
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install --upgrade pip setuptools wheel
-pip install -e .[dev]
-
-# In ~/mkdocs-asciidoctor-backend (with this venv active)
-python -m pip install -U mkdocs-material
-python -m mkdocs --version
-
-# Run a build
-python -m mkdocs build -f demo/mkdocs.yml -v \
-&& python -m mkdocs serve -f demo/mkdocs.yml
-```
-
-Demo build: https://aireilly.github.io/mkdocs-asciidoctor-backend/
