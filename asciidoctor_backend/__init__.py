@@ -1,4 +1,4 @@
-# asciidoc_backend/__init__.py
+# asciidoctor_backend/__init__.py
 import os
 import pathlib
 import subprocess
@@ -24,15 +24,12 @@ class Rendered:
     meta: dict
 
 
-class AsciiDocPlugin(BasePlugin):
+class AsciiDoctorPlugin(BasePlugin):
     """
     AsciiDoc backend for MkDocs 1.6+
     - Renders .adoc via Asciidoctor (content-only)
     - Injects HTML/TOC/meta
-    - Ships CSS and a copy-cleaner JS
-
-    Performance: single BeautifulSoup pass, optional concurrency, mtime cache.
-    Robustness: skip broken symlinks/vanished files; optional ignore-missing.
+    - Ships CSS, copy-cleaner JS, and a small RB edit extension
     """
     config_scheme = (
         ("asciidoctor_cmd", config_options.Type(str, default="asciidoctor")),
@@ -44,6 +41,9 @@ class AsciiDocPlugin(BasePlugin):
         ("trace", config_options.Type(bool, default=False)),
         ("max_workers", config_options.Type(int, default=8)),
         ("ignore_missing", config_options.Type(bool, default=False)),
+        ("edit_includes", config_options.Type(bool, default=False)),
+        ("edit_base_url", config_options.Type(str, default="")),
+        ("repo_root", config_options.Type(str, default=None)),
     )
 
     # (mtime, Rendered)
@@ -66,7 +66,6 @@ class AsciiDocPlugin(BasePlugin):
         self._safe = self.config["safe_mode"]
         self._attrs = self.config["attributes"] or {}
         self._reqs = self.config["requires"] or []
-        # build behavior
         self._fail = self.config["fail_on_error"]
         self._trace = self.config["trace"]
         self._max_workers = self.config["max_workers"]
@@ -80,16 +79,62 @@ class AsciiDocPlugin(BasePlugin):
         except Exception:
             pass
 
-        # Ship CSS + JS from our package (written in on_post_build)
-        self._pkg_css_res = resources.files(__package__) / "assets" / "asciidoc.css"
-        self._pkg_js_res = resources.files(__package__) / "assets" / "strip_callouts.js"
+        # Packaged assets
+        assets = resources.files(__package__) / "assets"
+        self._pkg_css_res = assets / "asciidoc.css"
+        self._pkg_js_res  = assets / "strip_callouts.js"
         self._pkg_css_href = "assets/asciidoc.css"
-        self._pkg_js_href = "assets/strip_callouts.js"
+        self._pkg_js_href  = "assets/strip_callouts.js"
+
+        # Ruby helper for include edit markers
+        self._ruby_inc_helper_res = assets / "include_edit.rb"
+
+        # --- Edit-includes wiring (prefer repo_url + edit_uri)
+        self._edit_includes = bool(self.config.get("edit_includes", False))
+        self._edit_base_url = ""
+        self._repo_root = self._project_dir  # temporary default; will auto-detect Git root below
+
+        if self._edit_includes:
+            base = (config.repo_url or "").rstrip("/") if getattr(config, "repo_url", None) else ""
+            edit_uri = (getattr(config, "edit_uri", "") or "").lstrip("/")
+            override = (self.config.get("edit_base_url") or "").strip()
+            if base and edit_uri:
+                self._edit_base_url = f"{base}/{edit_uri}".rstrip("/") + "/"
+            elif override:
+                self._edit_base_url = override.rstrip("/") + "/"
+
+            # Repo root selection:
+            # 1) explicit plugin setting wins
+            # 2) else try to discover Git root by walking up to a directory that contains .git
+            # 3) fall back to MkDocs project dir
+            repo_root_opt = self.config.get("repo_root")
+            if repo_root_opt:
+                self._repo_root = pathlib.Path(repo_root_opt).resolve()
+            else:
+                self._repo_root = self._discover_git_root(self._project_dir) or self._project_dir
+
+            if self._edit_base_url:
+                self._attrs["edit-base"] = self._edit_base_url
+                self._attrs["repo-root"] = str(self._repo_root)
+            else:
+                # no valid base → disable feature silently
+                self._edit_includes = False
 
         # Auto-include into the theme (keeps MkDocs/Material CSS intact)
         config.extra_css.append(self._pkg_css_href)
         config.extra_javascript.append(self._pkg_js_href)
         return config
+
+    def _discover_git_root(self, start: pathlib.Path) -> Optional[pathlib.Path]:
+        """Walk upward from `start` to find a directory containing .git. Return the path or None."""
+        p = start
+        try:
+            for candidate in [p, *p.parents]:
+                if (candidate / ".git").exists():
+                    return candidate.resolve()
+        except Exception:
+            pass
+        return None
 
     def on_files(self, files: Files, config: MkDocsConfig) -> Files:
         src_dir = pathlib.Path(config.docs_dir).resolve()
@@ -283,6 +328,16 @@ class AsciiDocPlugin(BasePlugin):
         if self._ignore_missing:
             args.extend(["--failure-level", "FATAL"])
 
+        # Enable include-edit helper when configured
+        if self._edit_includes and self._edit_base_url:
+            args.extend(["-a", "sourcemap"])
+            try:
+                with resources.as_file(self._ruby_inc_helper_res) as helper_path:
+                    args.extend(["-r", str(helper_path)])
+            except FileNotFoundError:
+                # Helper missing from package; continue without markers
+                pass
+
         try:
             proc = subprocess.run(args, check=True, capture_output=True)
             return proc.stdout.decode("utf-8", errors="ignore")
@@ -393,19 +448,15 @@ class AsciiDocPlugin(BasePlugin):
                     node["data-value"] = val
                 node["aria-hidden"] = "true"
 
-            # Remove a fallback "(n)" or "<n>" that appears immediately after the bubble,
-            # whether as a text node or wrapped in a common inline tag.
+            # Remove a fallback "(n)" or "<n>" immediately after the bubble
             for node in pre.select(".conum"):
                 sib = node.next_sibling
-
-                # skip whitespace-only text nodes
                 while isinstance(sib, NavigableString) and _WS_ONLY.match(str(sib) or ""):
                     nxt = sib.next_sibling
                     sib.extract()
                     sib = nxt
                 if sib is None:
                     continue
-
                 if isinstance(sib, NavigableString):
                     if _CALLOUT_TXT.match(str(sib)):
                         sib.extract()
@@ -414,13 +465,11 @@ class AsciiDocPlugin(BasePlugin):
                         if new_text != str(sib):
                             sib.replace_with(new_text)
                     continue
-
                 if getattr(sib, "name", None) in {"span", "em", "i", "b", "code", "strong", "small"}:
                     txt = sib.get_text("", strip=False)
                     if _CALLOUT_TXT.match(txt):
                         sib.extract()
                         continue
-                    # Sometimes split across children; rebuild and test
                     txt2 = "".join(ch if isinstance(ch, str) else ch.get_text("", strip=False) for ch in sib.contents)
                     if _CALLOUT_TXT.match(txt2):
                         sib.extract()
@@ -497,6 +546,37 @@ class AsciiDocPlugin(BasePlugin):
 
         for a in soup.find_all("a", href=True):
             a["href"] = _to_dir_url(a["href"])
+
+        # ---- Move include-edit markers into headings and render Material's pencil icon
+        if getattr(self, "_edit_includes", False) and self._edit_base_url:
+            markers = list(soup.select("span.adoc-include-edit[data-edit]"))
+            for marker in markers:
+                href = marker.get("data-edit")
+                if not href:
+                    marker.decompose()
+                    continue
+                sect = marker.find_parent(
+                    lambda t: hasattr(t, "get") and "class" in t.attrs and any(str(c).startswith("sect") for c in t["class"])
+                )
+                h = sect.find(re.compile(r"^h[1-6]$")) if sect else None
+                if not h:
+                    # fallback: nearest previous heading
+                    for prev in marker.previous_elements:
+                        if getattr(prev, "name", "") in {"h1", "h2", "h3", "h4", "h5", "h6"}:
+                            h = prev
+                            break
+                if not h:
+                    marker.decompose()
+                    continue
+
+                a = soup.new_tag("a", href=href,
+                                 **{"class": "md-content__button md-icon adoc-edit-include",
+                                    "title": "Edit included file", "target": "_blank", "rel": "noopener"})
+                svg = BeautifulSoup(
+                    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"></path></svg>', self._bs_parser)
+                a.append(svg)
+                h.append(a)
+                marker.decompose()
 
         return str(soup), toc, meta
 

@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=69", "wheel"]
+requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -8,19 +8,22 @@ version = "0.0.1"
 description = "Asciidoctor backend for MkDocs"
 readme = "README.md"
 requires-python = ">=3.9"
-dependencies = ["mkdocs>=1.6", "beautifulsoup4>=4.11"]
+dependencies = [
+  "mkdocs>=1.6",
+  "beautifulsoup4>=4.11"
+]
+
+[project.entry-points."mkdocs.plugins"]
+asciidoctor_backend = "asciidoctor_backend:AsciiDoctorPlugin"
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
 
 [flake8]
 ignore = "E501"
 
-[project.optional-dependencies]
-dev = ["pytest>=8", "beautifulsoup4>=4.11"]
-
-[project.entry-points."mkdocs.plugins"]
-asciidoc_backend = "asciidoc_backend:AsciiDocPlugin"
-
 [tool.setuptools]
-packages = ["asciidoc_backend"]
+packages = ["asciidoctor_backend"]
 
 [tool.setuptools.package-data]
-asciidoc_backend = ["assets/*.css", "assets/*.js"]
+asciidoc_backend = ["assets/*.css", "assets/*.js", "assets/*."]
