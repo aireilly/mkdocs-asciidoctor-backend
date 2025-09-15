@@ -20,6 +20,9 @@ python -m pip install --upgrade build twine
 rm -rf dist/ build/ *.egg-info
 python -m build
 twine check dist/*
+
+git tag v0.0.1
+git push origin --tags
 ```
 
 Demo build: https://aireilly.github.io/mkdocs-asciidoctor-backend/

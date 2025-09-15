@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mkdocs-asciidoctor-backend"
-version = "0.0.1"
+version = "0.0.7"
 description = "Asciidoctor backend for MkDocs"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -39,5 +39,5 @@ packages = ["asciidoctor_backend"]
 asciidoctor_backend = [
   "assets/*.css",
   "assets/*.js",
-  "assets/*.*"
+  "assets/*.rb"
 ]
