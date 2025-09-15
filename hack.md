@@ -23,6 +23,9 @@ twine check dist/*
 
 git tag v0.0.1
 git push origin --tags
+
+# Go forth
+pip install mkdocs-asciidoctor-backend --upgrade
 ```
 
 Demo build: https://aireilly.github.io/mkdocs-asciidoctor-backend/

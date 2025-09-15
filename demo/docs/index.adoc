@@ -1,9 +1,9 @@
-= DEMO This is MY DEMO
+= Demo
 :page-nav: true
 
 This is a demo site with lots of meaningless text.
 
-== Intro MY INTRO
+== Intro
 
 A link to <<anchors,anchors>> and xref:page-2.adoc#other-section[other page].
 
@@ -13,7 +13,7 @@ include::modules/module.adoc[leveloffset=+1]
 
 include::modules/procedure.adoc[leveloffset=+2]
 
-== anchors
+== Anchors
 
 [[explicit-id]]Heading with explicit id
 
