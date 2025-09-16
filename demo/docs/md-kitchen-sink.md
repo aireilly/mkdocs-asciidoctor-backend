@@ -1,6 +1,7 @@
-# Markdown Kitchen Sink
+<!-- Taken from https://github.com/obedm503/markdown-kitchen-sink/blob/master/README.md -->
+# Markdown kitchen sink
 
-[Will this link to an asciidoc file work?](page-2.adoc)
+Peep this [link to an asciidoc file](page-2.adoc).
 
 This is intended as a quick reference and showcase. For more complete info, see [John Gruber's original spec](http://daringfireball.net/projects/markdown/) and the [Github-flavored Markdown info page](http://github.github.com/github-flavored-markdown/).
 

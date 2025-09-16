@@ -90,3 +90,5 @@ plugins:
         source-highlighter: rouge
         "!toc": "" # Optional: unset the TOC
 ```
+
+A demo docs site is published here: https://aireilly.github.io/mkdocs-asciidoctor-backend/

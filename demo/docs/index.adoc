@@ -1,9 +1,33 @@
-= Demo
-:page-nav: true
+// Taken from https://github.com/docToolchain/multi-markup-demo/blob/main/src/docs/demo/asciidoc.adoc
+= AsciiDoc kitchen sink
 
-This is a demo site with lots of meaningless text.
+:description: This document exercises numerous features of AsciiDoc to test Asciidoctor compliance.
 
-== Intro
+:library: Asciidoctor
+ifdef::asciidoctor[]
+:source-highlighter: coderay
+endif::asciidoctor[]
+:idprefix:
+:stylesheet: asciidoc.css
+:imagesdir: ../images
+//:backend: docbook45
+//:backend: html5
+//:doctype: book
+//:sectids!:
+:plus: &#43;
+
+[role='lead']
+This is a demonstration of {library}. And this is the preamble of this document.
+
+[[purpose]]
+.Purpose
+****
+This document exercises many of the features of AsciiDoc to test the {library} implementation.
+****
+
+TIP: If you want the output to look familiar, copy (or link) the AsciiDoc stylesheet, asciidoc.css, to the output directory.
+
+NOTE: Items marked with TODO are either not yet supported or a work in progress.
 
 A link to <<anchors,anchors>> and xref:page-2.adoc#other-section[other page].
 
@@ -13,282 +37,184 @@ include::modules/module.adoc[leveloffset=+1]
 
 include::modules/procedure.adoc[leveloffset=+2]
 
+[[first,First Steps]]
+== First Steps with http://asciidoc.org[AsciiDoc]
+
+.Inline markup
+* single quotes around a phrase place 'emphasis'
+* astericks around a phrase make the text *bold*
+* double astericks around one or more **l**etters in a word make those letters bold
+* double underscore around a __sub__string in a word emphasize that substring
+* use carrots around characters to make them ^super^script
+* use tildes around characters to make them ~sub~script
+ifdef::basebackend-html[]
+* to pass through +++<u>HTML</u>+++ directly, surround the text with triple plus
+endif::basebackend-html[]
+ifdef::basebackend-docbook[]
+* to pass through +++<constant>XML</constant>+++ directly, surround the text with triple plus
+endif::basebackend-docbook[]
+
+// separate two adjacent lists using a line comment (only the leading // is required)
+
+- characters can be escaped using a {backslash}
+* for instance, you can escape a quote inside emphasized text like 'Here\'s Johnny!'
+- you can safely use reserved XML characters like <, > and &, which are escaped when rendering
+- force a space{sp}between inline elements using the \{sp} attribute
+- hold text together with an intrinsic non-breaking{nbsp}space attribute, \{nbsp}
+- handle words with unicode characters like in the name Gregory Romé
+- claim your copyright (C), registered trademark (R) or trademark (TM)
+
+You can write text http://example.com[with inline links], optionally{sp}using an explicit link:http://example.com[link prefix]. In either case, the link can have a http://example.com?foo=bar&lang=en[query string].
+
+If you want to break a line +
+just end it in a {plus} sign +
+and continue typing on the next line.
+
 == Anchors
 
-[[explicit-id]]Heading with explicit id
+Ahoy!
 
-// Variables:
-:current-release: prod-349
-// Settings:
-:experimental:
-:hide-uri-scheme:
-:toc: macro
-ifdef::env-github[]
-:important-caption: :exclamation:
-:tip-caption: :bulb:
-:!toc-title:
-:badges:
-endif::[]
-// Project URLs:
-:project-repo-name: asciidoctor/asciidoctor-docs-ui
-:url-project: https://github.com/{project-repo-name}
-:url-preview: https://asciidoctor-docs-ui.netlify.app
-:url-ci: {project-repo-name}/actions
-:url-netlify-deploys: https://app.netlify.com/sites/asciidoctor-docs-ui/deploys
-// External URLs:
-:url-antora: https://antora.org
-:url-antora-docs: https://docs.antora.org
-:url-antora-default-ui: https://gitlab.com/antora/antora-ui-default
-:url-asciidoctor: https://asciidoctor.org
-:url-git: https://git-scm.com
-:url-git-dl: {url-git}/downloads
-:url-opendevise: https://opendevise.com
-:url-nodejs: https://nodejs.org
-:url-nvm: https://github.com/creationix/nvm
-:url-nvm-install: {url-nvm}#installation
-:url-source-maps: https://developer.mozilla.org/en-US/docs/Tools/Debugger/How_to/Use_a_source_map
+=== Lists Upon Lists
 
-ifdef::badges[]
-image:https://img.shields.io/github/release/{project-repo-name}.svg[Latest Release,link={url-project}/releases/download/{current-release}/ui-bundle.zip]
-image:https://api.netlify.com/api/v1/badges/a9db5e1b-d7b7-48c0-b066-1b8d91e9c3d1/deploy-status[Deploy Status,link={url-netlify-deploys}]
-endif::[]
+.Adjacent lists
+* this list
+* should join
 
-This project provides the UI for the Asciidoctor docs site.
-It provides both the visual theme and user interactions for the docs site.
-The UI bundle that this project produces is designed to be used with Antora.
-It bundles the HTML templates (layouts, partials, and helpers), CSS, JavaScript, fonts, and site-wide images.
-The rest of the material for the docs site comes from the content repositories.
+* to have
+* four items
 
-== Usage
+[[numbered]]
+.Numbered lists
+. These items
+. will be auto-numbered
+.. and can be nested
+. A numbered list can nest
+* unordered
+* list
+* items
 
-To use this UI with Antora, add the following configuration to the playbook file for your site:
+.Statement
+I swear I left it in 'Guy\'s' car. Let\'s go look for it.
 
-[,yaml,subs=attributes+]
+[[defs]]
+term::
+definition
+line two
+[[another_term]]another term::
+
+  another definition, which can be literal (indented) or regular paragraph
+
+This should be a standalone paragraph, not grabbed by the definition list.
+
+[[nested]]
+* first level
+written on two lines
+* first level
++
+....
+with this literal text
+....
++
+** second level
+*** third level
+- fourth level
+* back to +
+first level
+
+// this is just a comment
+
+Let's make a horizontal rule...
+
+'''
+
+then take a break.
+
+////
+We'll be right with you...
+
+after this brief interruption.
+////
+
+== We're back!
+
+Want to see a image:cat.jpg[Tiger, 500px]]?
+
+Do you feel safer with the tiger in a box?
+
+.Tiger in a box
+image::cat.jpg[]
+
+.Asciidoctor usage example, should contain 3 lines
+[source, ruby]
 ----
-ui:
-  bundle:
-    url: {url-project}/releases/download/{current-release}/ui-bundle.zip # <1>
-  calling-birds:
-   - huey
-   - dewey
-   - louie
-   - fred <2>
-----
-<1> Here's a callout
-<2> Nonsense
+doc = Asciidoctor::Document.new("*This* is it!", :header_footer => false)
 
-To avoid having to manage the release number in the URL, you can grab the latest release using the following configuration instead:
-
-[,yaml,subs=attributes+]
-----
-ui:
-  bundle:
-    url: {url-project}/releases/download/prod-latest/ui-bundle.zip
-----
-
-In order for Antora to fetch the latest UI bundle in this case, the `--fetch` option must be used and the `snapshot` key must be set to `true` to bypass the cache.
-
-Read on to learn how to develop the UI.
-
-== Development Quickstart
-
-This section offers a basic tutorial to teach you how to set up the UI project, preview it locally, and bundle it for use with Antora.
-A more comprehensive tutorial can be found in the documentation at {url-antora-docs}.
-
-=== Prerequisites
-
-To preview and bundle the UI, you need the following software on your computer:
-
-* {url-git}[git] (command: `git`)
-* {url-nodejs}[Node.js] (commands: `node`, `npm`, and `npx`)
-
-==== git
-
-First, make sure you have git installed.
-
- $ git --version
-
-If not, {url-git-dl}[download and install] the git package for your system.
-
-==== Node.js
-
-Next, make sure that you have Node.js installed (which also provides npm).
-
- $ node --version
-
-If this command fails with an error, you don't have Node.js installed.
-If the command doesn't report an active LTS version of Node.js (e.g., v16.16.0), it means you don't have a suitable version of Node.js installed.
-In this guide, we'll be installing Node.js 16.
-
-While you can install Node.js from the official packages, we strongly recommend that you use {url-nvm}[nvm] (Node Version Manager) to manage your Node.js installation(s).
-Follow the {url-nvm-install}[nvm installation instructions] to set up nvm on your machine.
-
-Once you've installed nvm, open a new terminal and install Node.js 16 using the following command:
-
-[source,terminal]
-----
-$ nvm install 16
+puts doc.render
 ----
 
-This command installs the dependencies listed in [.path]_package.json_ into the [.path]_node_modules/_ folder inside the project.
-This folder does not get included in the UI bundle and should _not_ be committed to the source control repository.
+// FIXME: use ifdef to show output according to backend
+Here's what it outputs (using the built-in templates):
 
-=== Preview the UI
+....
+<div class="paragraph">
+  <p><strong>This</strong> is it!</p>
+</div>
+....
 
-The UI project is configured to preview offline.
-The files in the [.path]_preview-site-src/_ folder provide the sample content that allow you to see the UI in action.
-In this folder, you'll primarily find pages written in AsciiDoc.
-These pages provide a representative sample and kitchen sink of content from the real site.
+=== ``Quotes``
 
-To build the UI and preview it in a local web server, run the `preview` command:
+____
+AsciiDoc is 'so' *powerful*!
+____
 
- $ npx gulp preview
+This verse comes to mind.
+
+[verse]
+La la la
+
+Here's another quote:
+
+[quote, Sir Arthur Conan Doyle, The Adventures of Sherlock Holmes]
+____
+When you have eliminated all which is impossible, then whatever remains, however improbable, must be the truth.
+____
+
+Getting Literal [[literally]]
+-----------------------------
+
+ Want to get literal? Just prefix a line with a space (just one will do).
+
+....
+I'll join that party, too.
+....
+
+We forgot to mention in <<numbered>> that you can change the numbering style.
+
+.. first item (yeah!)
+.. second item, looking `so mono`
+.. third item, +mono+ it is!
+
+// This attribute line will get reattached to the next block
+// despite being followed by a trailing blank line
+[id='wrapup']
+
+== Wrap-up
+
+NOTE: AsciiDoc is quite cool, you should try it!
 
 [TIP]
-====
-Alternatively, you can use the following command:
+.Info
+=====
+Go to this URL to learn more about it:
 
-[source,terminal]
-----
-$ npm start
-----
+* http://asciidoc.org
 
-When using `npm start`, you don't have to prefix the `npm` command with `npx`.
-====
+Or you could return to the xref:first[] or <<purpose,Purpose>>.
+=====
 
-You'll see a URL listed in the output of this command:
+Here's a reference to the definition of <<another_term>>, in case you forgot it.
 
-....
-[12:00:00] Starting server...
-[12:00:00] Server started http://localhost:5252
-[12:00:00] Running server
-....
+[NOTE]
+One more thing. Happy documenting!
 
-Navigate to this URL to preview the site locally.
-
-While this command is running, any changes you make to the source files will be instantly reflected in the browser.
-This works by monitoring the project for changes, running the `preview:build` task if a change is detected, and sending the updates to the browser.
-
-Press kbd:[Ctrl+C] to stop the preview server and end the continuous build.
-
-=== Package for Use with Antora
-
-If you need to package the UI so you can use it to generate the documentation site locally, run the following command:
-
- $ npx gulp bundle
-
-If any errors are reported by lint, you'll need to fix them.
-
-When the command completes successfully, the UI bundle will be available at [.path]_build/ui-bundle.zip_.
-You can point Antora at this bundle using the `--ui-bundle-url` command-line option.
-
-If you have the preview running, and you want to bundle without causing the preview to be clobbered, use:
-
- $ npx gulp bundle:pack
-
-The UI bundle will again be available at [.path]_build/ui-bundle.zip_.
-
-==== Source Maps
-
-The build consolidates all the CSS and client-side JavaScript into combined files, [.path]_site.css_ and [.path]_site.js_, respectively, in order to reduce the size of the bundle.
-{url-source-maps}[Source maps] correlate these combined files with their original sources.
-
-This "`source mapping`" is accomplished by generating additional map files that make this association.
-These map files sit adjacent to the combined files in the build folder.
-The mapping they provide allows the debugger to present the original source rather than the obfuscated file, an essential tool for debugging.
-
-In preview mode, source maps are enabled automatically, so there's nothing you have to do to make use of them.
-If you need to include source maps in the bundle, you can do so by setting the `SOURCEMAPS` environment varible to `true` when you run the bundle command:
-
- $ SOURCEMAPS=true npx gulp bundle
-
-In this case, the bundle will include the source maps, which can be used for debuggging your production site.
-
-=== Create an Online Preview
-
-You can share a preview of the UI online by submitting a pull request to GitHub.
-The repository is configured to create a deploy preview on Netlify for every pull request.
-Here's how that process works:
-
-. Fork the repository on GitHub (only has to be done once).
-. Create a local branch.
-. Make changes to the UI.
-. Commit your changes to that branch.
-. Push that branch to your fork (on GitHub).
-. Submit a pull request from the branch you pushed to your fork.
-. Wait for deploy/netlify check to say "`Deploy preview ready!`" on the pull request page.
-. Click on the "`Details`" link under "`Show all checks`" on the pull request page to get the preview URL.
-. Visit the preview URL to view your changes or share the preview URL with others.
-
-The deploy preview works because there is a webhook on the repository that pings \https://api.netlify.com/hooks/github for the following events: push, pull_request, delete_branch.
-Netlify then runs the command specified in netlify.toml, deploys the site, and allocates a temporary preview URL for it.
-
-Included in that temporary preview URL is the UI bundle itself.
-That means you can test it directly with Antora.
-To access the UI bundle, append `dist/ui-bundle.zip` to the end of the preview URL, then pass that URL to Antora as follows:
-
- $ antora --ui-bundle-url=<preview URL>/dist/ui-bundle.zip antora-playbook.yml
-
-The temporary preview URL will automatically be decommissioned once the PR is closed.
-
-== Releases
-
-Releases are handled by the `npx gulp release` task, which is automated by a CI job.
-The release process boils down to the following steps:
-
-. Pack the UI bundle.
-. Tag the git repository using the next version number in the sequence (e.g., v100 after v99)
-. Create a GitHub release from that git tag.
-. Attach the UI bundle to that release as an asset in zip format.
-. Update the README to reference the URL of the lastest bundle and commit that update to the repository.
-
-Fortunately, you don't have to do any of these steps yourself.
-These steps are fully automated by the `npx gulp release` task.
-In fact, you don't even have to run this task.
-Whenever a commit is pushed to the master branch of the repository, it triggers the CI job on master, which executes the `npx gulp release` task using pre-configured credentials.
-
-IMPORTANT: A release will only be made if the project validates (i.e., all lint tasks pass).
-To validate the project, run `npx gulp lint` before pushing your changes to GitHub.
-
-The CI job is already configured, so there's nothing you need to do to make automated release work.
-All you have to do is commit your changes and push those commits to the master branch of the git repository.
-A few seconds later, a new bundle will be available for use with Antora.
-Run `git pull` to retrieve the updated README that includes the new URL.
-
-If you want to commit a change to master without making a release, add the string `[skip ci]` to the end of the commit message.
-
-The next two sections document how the CI job is set up an configured.
-
-=== Release Task Prerequisites
-
-In addition to the <<Prerequisites>> covered above, you'll need a personal access token for the automated GitHub account, asciidoctor-docbot, so it has permission to make changes to the repository on GitHub.
-The asciidoctor-docbot account will need at least write access to the {url-project} repository, though admin access is recommended.
-
-Start by creating a https://help.github.com/articles/creating-a-personal-access-token-for-the-command-line/[personal access token] for the asciidoctor-docbot user.
-The `release` task relies on this token to interact with the GitHub API to create the tag, create the release, and attach the UI bundle.
-The token must have the `public_repo` scope.
-No other scopes are required (as long as the asciidoctor-docbot user has write access to the repository).
-
-=== CI Job
-
-The {url-ci}[CI job] is executed by GitHub Actions and is defined in the file [.path]_.github/workflows/release.yml_.
-It boils down to running the `npx gulp release` task on the main branch.
-The GITHUB_API_TOKEN environment variable is defined in the job configuration.
-
-Once the CI job runs and a new UI bundle is available, you can update the URL of the UI bundle in the Antora playbook file.
-See <<Usage>> for details.
-
-== Copyright and License
-
-=== Software
-
-This project is a derivative of the {url-antora-default-ui}[Antora default UI].
-The software assets in this repository (Gulp build script and tasks, web JavaScript files, Handlebars templates and JavaScript helpers, common CSS, utility icons, etc.) come from the {url-antora}[Antora project].
-As such, use of the software is granted under the terms of the https://www.mozilla.org/en-US/MPL/2.0/[Mozilla Public License Version 2.0] (MPL-2.0).
-See link:LICENSE[] to find the full license text.
-
-=== Branding and Design
-
-Copyright (C) {url-asciidoctor}[Asciidoctor] 2018-present.
-This includes any CSS that provides colors or iconography that depict the Asciidoctor brand.
-All rights reserved (until further notice).
+[[google]]When all else fails, head over to <http://google.com>.
