@@ -22,7 +22,7 @@ Asciidoctor attributes can be injected via the `mkdocs.yml`.
 > 
 > - For larger doc sets, set up a `nav` element in the `mkdocs.yml`, and optionally a root `docs/index.adoc` file. See [nav](https://www.mkdocs.org/user-guide/configuration/#nav) for more details.
 > 
-> - xrefs elements may require you to set `relfileprefix` either globally in `mkdocs.yml` or per section/assembly file.
+> - xrefs might require you to set `relfileprefix` either globally in `mkdocs.yml` or per section/assembly file.
 
 The following example `mkdocs.yml` can be dropped into the root of an existing AsciiDoc project. 
 

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mkdocs-asciidoctor-backend"
-version = "0.0.12"
+version = "0.0.14"
 description = "Asciidoctor backend for MkDocs"
 readme = "README.md"
 requires-python = ">=3.9"
