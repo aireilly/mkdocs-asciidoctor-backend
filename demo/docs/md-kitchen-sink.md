@@ -1,7 +1,5 @@
 # Markdown Kitchen Sink
 
-This file is https://github.com/adam-p/markdown-here/wiki/Markdown-Cheatsheet plus a few fixes and additions. Used by [obedm503/bootmark](https://github.com/obedm503/bootmark) to [demonstrate](https://obedm503.github.io/bootmark/docs/markdown-cheatsheet.html) it's styling features.
-
 [Will this link to an asciidoc file work?](page-2.adoc)
 
 This is intended as a quick reference and showcase. For more complete info, see [John Gruber's original spec](http://daringfireball.net/projects/markdown/) and the [Github-flavored Markdown info page](http://github.github.com/github-flavored-markdown/).
