@@ -1,10 +1,10 @@
 [build-system]
-requires = ["setuptools>=68", "wheel"]
+requires = ["setuptools>=68", "wheel", "setuptools-scm>=8"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "mkdocs-asciidoctor-backend"
-version = "0.0.12"
+dynamic = ["version"]
 description = "Asciidoctor backend for MkDocs"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -22,6 +22,11 @@ classifiers = [
   "License :: OSI Approved :: MIT License",
   "Operating System :: OS Independent",
 ]
+
+[project.urls]
+Homepage = "https://github.com/aidanreilly/mkdocs-asciidoctor-backend"
+Source = "https://github.com/aidanreilly/mkdocs-asciidoctor-backend"
+Issues = "https://github.com/aidanreilly/mkdocs-asciidoctor-backend/issues"
 
 [project.entry-points."mkdocs.plugins"]
 asciidoctor_backend = "asciidoctor_backend:AsciiDoctorPlugin"
@@ -41,3 +46,7 @@ asciidoctor_backend = [
   "assets/*.js",
   "assets/*.rb"
 ]
+
+[tool.setuptools_scm]
+version_scheme = "guess-next-dev"
+local_scheme = "node-and-date"
