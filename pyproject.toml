@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mkdocs-asciidoctor-backend"
-version = "0.0.12"
+version = "0.0.18a1"
 description = "Asciidoctor backend for MkDocs"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -22,6 +22,11 @@ classifiers = [
   "License :: OSI Approved :: MIT License",
   "Operating System :: OS Independent",
 ]
+
+[project.urls]
+Homepage = "https://github.com/aidanreilly/mkdocs-asciidoctor-backend"
+Source = "https://github.com/aidanreilly/mkdocs-asciidoctor-backend"
+Issues = "https://github.com/aidanreilly/mkdocs-asciidoctor-backend/issues"
 
 [project.entry-points."mkdocs.plugins"]
 asciidoctor_backend = "asciidoctor_backend:AsciiDoctorPlugin"
