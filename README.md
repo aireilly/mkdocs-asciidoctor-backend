@@ -3,7 +3,7 @@
 Use AsciiDoc with Material for MkDocs.
 
 > [!IMPORTANT]
-> This is a very early Alpha release and is absolutely not suitable for production
+> This package is currently in alpha. Features are incomplete, the API may change without notice, and stability is not guaranteed. Use in production environments is not recommended. Feedback and testing are welcome.
 
 This MkDocs plugin replaces the MkDocs default Markdown processor with [Asciidoctor](https://asciidoctor.org/) for AsciiDoc files, allowing you to write documentation in AsciiDoc while keeping full compatibility with Material for MkDocs. 
 
@@ -16,13 +16,17 @@ Asciidoctor attributes can be injected via the `mkdocs.yml`.
 
 ## Using mkdocs-asciidoctor-backend
 
+```bash
+pip install mkdocs-asciidoctor-backend --upgrade --pre
+```
+
 > [!IMPORTANT]
 >
 > - MkDocs expects docs source in a `docs/` folder. See [Strategy for including docs from repository root](https://github.com/mkdocs/mkdocs/discussions/3062) for further discussion.
 > 
 > - For larger doc sets, set up a `nav` element in the `mkdocs.yml`, and optionally a root `docs/index.adoc` file. See [nav](https://www.mkdocs.org/user-guide/configuration/#nav) for more details.
 > 
-> - xrefs elements may require you to set `relfileprefix` either globally in `mkdocs.yml` or per section/assembly file.
+> - xrefs might require you to set `relfileprefix` either globally in `mkdocs.yml` or per section/assembly file.
 
 The following example `mkdocs.yml` can be dropped into the root of an existing AsciiDoc project. 
 
