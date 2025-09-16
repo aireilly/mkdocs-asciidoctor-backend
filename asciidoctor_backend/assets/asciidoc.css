@@ -142,10 +142,11 @@
   align-items: flex-start;   /* top of first line */
 }
 
-/* Neutralize Material's absolute positioning and push icon right */
+/* Neutralize Material's absolute positioning and push adoc-edit-include icon right */
 .md-typeset .adoc-edit-include {
   display: inline-flex;
   margin-left: auto;
   align-self: flex-start;
-  align-items: top;
+  justify-content: flex-end;
+  width: 4rem;
 }

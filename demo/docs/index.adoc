@@ -24,8 +24,6 @@ This is a demonstration of {library}. And this is the preamble of this document.
 This document exercises many of the features of AsciiDoc to test the {library} implementation.
 ****
 
-NOTE: Items marked with TODO are either not yet supported or a work in progress.
-
 A link to <<anchors,anchors>> and xref:page-2.adoc#other-section[other page].
 
 include::snippets/_snippet.adoc[]
