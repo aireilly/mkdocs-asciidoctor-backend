@@ -3,7 +3,7 @@
 Use AsciiDoc with Material for MkDocs.
 
 > [!IMPORTANT]
-> This package is currently in alpha. Features are incomplete, the API may change without notice, and stability is not guaranteed. Use in production environments is not recommended. Feedback and testing are welcome.
+> This package is an early release. Features are incomplete, the API may change without notice, and stability is not guaranteed. Use in production environments is not recommended. Feedback and testing are welcome.
 
 This MkDocs plugin replaces the MkDocs default Markdown processor with [Asciidoctor](https://asciidoctor.org/) for AsciiDoc files, allowing you to write documentation in AsciiDoc while keeping full compatibility with Material for MkDocs. 
 
@@ -77,7 +77,6 @@ plugins:
       fail_on_error: false
       ignore_missing: true
       safe_mode: safe
-      base_dir: .
       attributes:
         imagesdir: images
         showtitle: true
