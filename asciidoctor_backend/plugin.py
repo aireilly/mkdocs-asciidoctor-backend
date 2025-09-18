@@ -78,10 +78,8 @@ class AsciiDoctorPlugin(BasePlugin):
             requires=self.config_manager.requires,
             fail_on_error=self.config_manager.fail_on_error,
             trace=self.config_manager.trace,
-            ignore_missing=self.config_manager.ignore_missing,
             edit_includes=self.config_manager.edit_includes,
             edit_base_url=self.config_manager.edit_base_url,
-            repo_root=self.config_manager.repo_root,
             use_dir_urls=bool(config.use_directory_urls)
         )
 
