@@ -67,27 +67,31 @@ class AsciiDoctorRenderer:
             return memo_hit
 
         mtime = safe_mtime(src_path)
-        if mtime is None:
-            msg = f"AsciiDoc source missing or broken symlink: {src_path}"
-            if self.fail_on_error and not self.ignore_missing:
-                raise SystemExit(msg)
-            from mkdocs.structure.toc import TableOfContents as Toc
-            return Rendered(html=f"<pre>{escape_html(msg)}</pre>", toc=Toc([]), meta={})
 
         # Check cache
         cached = self._cache.get(key)
-        if cached and cached[0] == mtime:
+        if cached and mtime is not None and cached[0] == mtime:
             rendered = cached[1]
             self._memo[key] = rendered
             return rendered
 
-        # Render fresh
-        src, rendered = self.render_fresh(src_path)
-        mt = safe_mtime(src)
-        if mt is not None:
-            self._cache[str(src)] = (mt, rendered)
-        self._memo[key] = rendered
-        return rendered
+        # Render fresh - let asciidoctor handle file resolution and errors
+        try:
+            src, rendered = self.render_fresh(src_path)
+            mt = safe_mtime(src)
+            if mt is not None:
+                self._cache[str(src)] = (mt, rendered)
+            self._memo[key] = rendered
+            return rendered
+        except SystemExit:
+            # If asciidoctor fails, only then handle missing files
+            if mtime is None and not src_path.exists():
+                msg = f"AsciiDoc source missing: {src_path}"
+                if self.fail_on_error and not self.ignore_missing:
+                    raise SystemExit(msg)
+                from mkdocs.structure.toc import TableOfContents as Toc
+                return Rendered(html=f"<pre>{escape_html(msg)}</pre>", toc=Toc([]), meta={})
+            raise
 
     def render_fresh(self, src: pathlib.Path) -> Tuple[pathlib.Path, Rendered]:
         """Render AsciiDoc file without caching."""
