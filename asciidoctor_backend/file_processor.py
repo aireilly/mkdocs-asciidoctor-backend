@@ -21,8 +21,9 @@ from .utils import is_valid_adoc_path
 
 
 class FileProcessor:
-    def __init__(self, ignore_missing: bool = False):
+    def __init__(self, ignore_missing: bool = False, symlink_dirs: list = None):
         self.ignore_missing = ignore_missing
+        self.symlink_dirs = symlink_dirs or ["partials", "snippets", "modules"]
         self.adoc_pages: Dict[str, pathlib.Path] = {}
 
     def process_files(self, files: Files, config: MkDocsConfig) -> Files:
@@ -70,7 +71,7 @@ class FileProcessor:
             if not is_valid_adoc_path(p):
                 continue
             rel = p.relative_to(src_dir).as_posix()
-            if rel.startswith(("partials/", "snippets/", "modules/")):
+            if any(rel.startswith(f"{d}/") for d in self.symlink_dirs):
                 continue
 
             f = File(
