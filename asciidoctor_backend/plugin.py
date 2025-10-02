@@ -47,6 +47,7 @@ class AsciiDoctorPlugin(BasePlugin):
         ("trace", config_options.Type(bool, default=False)),
         ("max_workers", config_options.Type(int, default=0)),
         ("ignore_missing", config_options.Type(bool, default=False)),
+        ("symlink_dirs", config_options.Type(list, default=["partials", "snippets", "modules", "assemblies"])),
         # Edit-includes feature
         ("edit_includes", config_options.Type(bool, default=False)),
         ("edit_base_url", config_options.Type(str, default="")),
@@ -67,7 +68,10 @@ class AsciiDoctorPlugin(BasePlugin):
     def on_config(self, config: MkDocsConfig):
         # Initialize components
         self.config_manager = ConfigurationManager(self.config)
-        self.file_processor = FileProcessor(ignore_missing=self.config["ignore_missing"])
+        self.file_processor = FileProcessor(
+            ignore_missing=self.config["ignore_missing"],
+            symlink_dirs=self.config["symlink_dirs"]
+        )
 
         # Configure from MkDocs config
         config = self.config_manager.configure_from_mkdocs_config(config)
