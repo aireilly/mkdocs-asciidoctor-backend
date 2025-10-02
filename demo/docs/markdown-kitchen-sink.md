@@ -5,11 +5,9 @@ Peep this [link to an asciidoc file](page-2.adoc).
 
 > [!NOTE]
 > 
-> This is a GFM note
+> This is a GFM note.
 
 This is intended as a quick reference and showcase. For more complete info, see [John Gruber's original spec](http://daringfireball.net/projects/markdown/) and the [Github-flavored Markdown info page](http://github.github.com/github-flavored-markdown/).
-
-Note that there is also a [Cheatsheet specific to Markdown Here](./Markdown-Here-Cheatsheet) if that's what you're looking for. You can also check out [more Markdown tools](./Other-Markdown-Tools).
 
 <a name="headers"></a>
 
@@ -125,7 +123,7 @@ There are two ways to create links.
 
 [I'm a reference-style link][Arbitrary case-insensitive reference text]
 
-[I'm a relative reference to a repository file](../blob/master/LICENSE)
+<!-- [I'm a relative reference to a repository file](../blob/master/LICENSE) -->
 
 [You can use numbers for reference-style link definitions][1]
 
@@ -147,8 +145,6 @@ Some text to show that the reference links can follow later.
 [I'm an inline-style link with title](https://www.google.com "Google's Homepage")
 
 [I'm a reference-style link][Arbitrary case-insensitive reference text]
-
-[I'm a relative reference to a repository file](../blob/master/LICENSE)
 
 [You can use numbers for reference-style link definitions][1]
 

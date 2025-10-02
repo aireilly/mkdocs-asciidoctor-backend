@@ -4,6 +4,8 @@
 
 In the title of concept modules, include nouns or noun phrases that are used in the body text. This helps readers and search engines find the information quickly. Do not start the title of concept modules with a verb.
 
+Hi.
+
 Some text! Yes some text. Some more text.
 
 This is the xref:page-2.adoc#other-section[other-section] xref.

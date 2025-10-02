@@ -42,7 +42,7 @@ jobs:
       - name: Install Python deps
         run: |
           python -m pip install -U pip
-          pip install mkdocs mkdocs-material beautifulsoup4
+          pip install mkdocs mkdocs-material beautifulsoup4 markdown_gfm_admonition
           pip install -e .
 
       - name: Build MkDocs site
