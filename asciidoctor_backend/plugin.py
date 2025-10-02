@@ -51,6 +51,9 @@ class AsciiDoctorPlugin(BasePlugin):
         ("edit_includes", config_options.Type(bool, default=False)),
         ("edit_base_url", config_options.Type(str, default="")),
         ("repo_root", config_options.Type(str, default=None)),
+        # Long-running server feature
+        ("use_server", config_options.Type(bool, default=True)),
+        ("server_socket", config_options.Type(str, default="/tmp/asciidoctor.sock")),
     )
 
     def __init__(self):
@@ -80,8 +83,13 @@ class AsciiDoctorPlugin(BasePlugin):
             trace=self.config_manager.trace,
             edit_includes=self.config_manager.edit_includes,
             edit_base_url=self.config_manager.edit_base_url,
-            use_dir_urls=bool(config.use_directory_urls)
+            use_dir_urls=bool(config.use_directory_urls),
+            use_server=self.config["use_server"],
+            server_socket=self.config["server_socket"]
         )
+
+        # Start the server if enabled
+        self.renderer.start_server()
 
         return config
 

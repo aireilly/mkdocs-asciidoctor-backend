@@ -3,14 +3,14 @@
 Use AsciiDoc with Material for MkDocs.
 
 > [!IMPORTANT]
-> This package is an early release. Features are incomplete, the API may change without notice, and stability is not guaranteed. Use in production environments is not recommended. Feedback and testing are welcome.
+> This package is an early release. The API may change without notice, and stability is not guaranteed. Use in production environments is not recommended. Feedback and testing are welcome.
 
-This MkDocs plugin replaces the MkDocs default Markdown processor with [Asciidoctor](https://asciidoctor.org/) for AsciiDoc files, allowing you to write documentation in AsciiDoc while keeping full compatibility with Material for MkDocs. 
+This MkDocs plugin replaces the MkDocs default Markdown processor with [Asciidoctor](https://asciidoctor.org/) for AsciiDoc files, allowing you to write documentation in AsciiDoc while keeping full compatibility with Material for MkDocs.
 
-It runs the Ruby Asciidoctor CLI to render `*.adoc` files, normalizes the output HTML with BeautifulSoup, and adjusts it to match MkDocs conventions.
+It uses a long-running Ruby Asciidoctor backend server for fast rendering of `*.adoc` files, normalizes the output HTML with BeautifulSoup, and adjusts it to match MkDocs conventions.
 The plugin ships some CSS/JS/RB and optionally injects "edit this page" links for included AsciiDoc modules when `repo_url` and `edit_uri` are configured.
 
-Supports hot reload on the development server for all AsciiDoc source files  when writing.
+Supports hot reload on the development server for all AsciiDoc source files when writing.
 
 Asciidoctor attributes can be injected via the `mkdocs.yml`.
 
@@ -26,7 +26,7 @@ pip install mkdocs-asciidoctor-backend --upgrade --pre
 > 
 > - For larger doc sets, set up a `nav` element in the `mkdocs.yml`, and optionally a root `docs/index.adoc` file. See [nav](https://www.mkdocs.org/user-guide/configuration/#nav) for more details.
 > 
-> - xrefs might require you to set `relfileprefix` either globally in `mkdocs.yml` or per section/assembly file.
+> - Asciidoctor xrefs might require you to set `relfileprefix` either globally in `mkdocs.yml` or per section/assembly file.
 
 The following example `mkdocs.yml` can be dropped into the root of an existing AsciiDoc project. 
 
@@ -87,7 +87,6 @@ plugins:
         idseparator: "-"
         outfilesuffix: .html
         source-highlighter: rouge
-        "!toc": "" # Optional: unset the TOC
 ```
 
 A demo docs site is published here: https://aireilly.github.io/mkdocs-asciidoctor-backend/

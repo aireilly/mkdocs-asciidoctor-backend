@@ -19,8 +19,9 @@ class AsciiDoctorRenderer:
     def __init__(self, cmd: str = "asciidoctor", safe_mode: str = "safe",
                  base_dir: Optional[pathlib.Path] = None, attributes: Optional[Dict] = None,
                  requires: Optional[List[str]] = None, fail_on_error: bool = True,
-                 trace: bool = False, edit_includes: bool = False, 
-                 edit_base_url: str = "", use_dir_urls: bool = True):
+                 trace: bool = False, edit_includes: bool = False,
+                 edit_base_url: str = "", use_dir_urls: bool = True,
+                 use_server: bool = False, server_socket: str = "/tmp/asciidoctor.sock"):
         self.cmd = cmd
         self.safe_mode = safe_mode
         self.base_dir = base_dir
@@ -31,6 +32,8 @@ class AsciiDoctorRenderer:
         self.edit_includes = edit_includes
         self.edit_base_url = edit_base_url
         self.use_dir_urls = use_dir_urls
+        self.use_server = use_server
+        self.server_socket = server_socket
 
         # Initialize HTML processor
         self.html_processor = HtmlProcessor(
@@ -42,6 +45,9 @@ class AsciiDoctorRenderer:
         # Cache for rendered content
         self._cache: Dict[str, Tuple[float, Rendered]] = {}
         self._memo: Dict[str, Rendered] = {}
+
+        # Server client (lazy initialization)
+        self._server_client = None
 
     def clear_memo(self):
         """Clear the per-build memo cache."""
@@ -87,7 +93,72 @@ class AsciiDoctorRenderer:
         html, toc, meta = self.html_processor.postprocess_html(html)
         return Rendered(html=html, toc=toc, meta=meta)
 
+    def start_server(self):
+        """Start the server if use_server is enabled."""
+        if self.use_server and self._server_client is None:
+            from .asciidoctor_client import AsciidoctorServerClient
+
+            # Get server script path
+            assets = resources.files("asciidoctor_backend") / "assets"
+            server_script = assets / "asciidoctor_server.rb"
+
+            with resources.as_file(server_script) as script_path:
+                self._server_client = AsciidoctorServerClient(
+                    socket_path=self.server_socket,
+                    server_script=script_path,
+                    auto_start=True
+                )
+                self._server_client.ensure_server_running()
+
+    def _get_server_client(self):
+        """Get the server client (must be initialized first)."""
+        if self._server_client is None:
+            raise RuntimeError("Server client not initialized. Call start_server() first.")
+        return self._server_client
+
     def _run_asciidoctor(self, src_path: pathlib.Path) -> str:
+        """Execute asciidoctor command and return HTML."""
+        if self.use_server:
+            return self._run_via_server(src_path)
+        else:
+            return self._run_via_command(src_path)
+
+    def _run_via_server(self, src_path: pathlib.Path) -> str:
+        """Run asciidoctor via the server."""
+        try:
+            client = self._get_server_client()
+
+            # Build attributes with sourcemap if edit_includes is enabled
+            attributes = self.attributes.copy()
+            requires = self.requires.copy()
+
+            if self.edit_includes and self.edit_base_url:
+                attributes['sourcemap'] = ''
+                # Add include_edit.rb helper to requires
+                assets = resources.files("asciidoctor_backend") / "assets"
+                ruby_helper_res = assets / "include_edit.rb"
+                try:
+                    with resources.as_file(ruby_helper_res) as helper_path:
+                        requires.append(str(helper_path))
+                except FileNotFoundError:
+                    pass
+
+            response = client.convert_file(
+                file_path=src_path,
+                safe_mode=self.safe_mode,
+                attributes=attributes,
+                requires=requires,
+                base_dir=self.base_dir
+            )
+            return response['html']
+
+        except Exception as e:
+            msg = f"Asciidoctor server failed for {src_path}:\n{str(e)}"
+            if self.fail_on_error:
+                raise SystemExit(msg)
+            return f"<pre>{escape_html(msg)}</pre>"
+
+    def _run_via_command(self, src_path: pathlib.Path) -> str:
         """Execute asciidoctor command and return HTML."""
         args = self._build_asciidoctor_args(src_path)
 
