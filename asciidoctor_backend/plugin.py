@@ -67,7 +67,9 @@ class AsciiDoctorPlugin(BasePlugin):
     def on_config(self, config: MkDocsConfig):
         # Initialize components
         self.config_manager = ConfigurationManager(self.config)
-        self.file_processor = FileProcessor(ignore_missing=self.config["ignore_missing"])
+        self.file_processor = FileProcessor(
+            ignore_missing=self.config["ignore_missing"]
+        )
 
         # Configure from MkDocs config
         config = self.config_manager.configure_from_mkdocs_config(config)

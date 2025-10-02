@@ -11,6 +11,7 @@ Handles file discovery, validation, and processing:
 - Page type detection and management
 """
 
+import os
 import pathlib
 from typing import Dict
 
@@ -64,31 +65,54 @@ class FileProcessor:
             except OSError:
                 files.remove(f)
 
+    def _is_inside_symlink(self, path: pathlib.Path, base: pathlib.Path) -> bool:
+        """Check if path is inside a symlinked directory.
+
+        Returns True if any parent directory component is a symlink.
+        """
+        try:
+            rel_parts = path.relative_to(base).parts[:-1]  # exclude filename
+            current = base
+            for part in rel_parts:
+                current = current / part
+                if current.is_symlink():
+                    return True
+            return False
+        except (ValueError, OSError):
+            return False
+
     def _add_adoc_pages(self, files: Files, src_dir: pathlib.Path, site_dir: pathlib.Path, config: MkDocsConfig):
         """Add .adoc files as documentation pages."""
-        for p in src_dir.rglob("*.adoc"):
-            if not is_valid_adoc_path(p):
-                continue
-            rel = p.relative_to(src_dir).as_posix()
-            if rel.startswith(("partials/", "snippets/", "modules/")):
-                continue
+        for root, dirs, filenames in os.walk(src_dir, followlinks=False):
+            for filename in filenames:
+                if not filename.endswith('.adoc'):
+                    continue
+                p = pathlib.Path(root) / filename
+                if not is_valid_adoc_path(p):
+                    continue
 
-            f = File(
-                rel,
-                src_dir=str(src_dir),
-                dest_dir=config.site_dir,
-                use_directory_urls=config.use_directory_urls
-            )
-            f.is_documentation_page = (lambda f=f: True)  # MkDocs 1.6
+                # Skip files inside symlinked directories
+                if self._is_inside_symlink(p, src_dir):
+                    continue
 
-            self.adoc_pages[rel] = p
+                rel = p.relative_to(src_dir).as_posix()
 
-            # Compute dest_path + url (mirror Markdown behavior)
-            dest_path, url = self._compute_dest_path_and_url(f, config)
-            f.dest_path = dest_path
-            f.abs_dest_path = str(site_dir / dest_path)
-            f.url = url
-            files.append(f)
+                f = File(
+                    rel,
+                    src_dir=str(src_dir),
+                    dest_dir=config.site_dir,
+                    use_directory_urls=config.use_directory_urls
+                )
+                f.is_documentation_page = (lambda f=f: True)  # MkDocs 1.6
+
+                self.adoc_pages[rel] = p
+
+                # Compute dest_path + url (mirror Markdown behavior)
+                dest_path, url = self._compute_dest_path_and_url(f, config)
+                f.dest_path = dest_path
+                f.abs_dest_path = str(site_dir / dest_path)
+                f.url = url
+                files.append(f)
 
     def _compute_dest_path_and_url(self, f: File, config: MkDocsConfig) -> tuple[str, str]:
         """Compute destination path and URL for an AsciiDoc file."""
