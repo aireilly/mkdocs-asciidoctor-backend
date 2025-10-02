@@ -73,6 +73,7 @@ exclude_docs: |
 plugins:
   - search
   - asciidoctor_backend:
+      symlink_dirs: ["partials", "snippets", "modules", "assemblies"] #configure project symlink folders to ignore
       edit_includes: true
       fail_on_error: false
       ignore_missing: true
