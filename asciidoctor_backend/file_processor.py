@@ -31,6 +31,22 @@ class FileProcessor:
         src_dir = pathlib.Path(config.docs_dir).resolve()
         site_dir = pathlib.Path(config.site_dir)
 
+        # Remove .adoc files that were discovered through symlinked directories
+        # But allow static files (images, etc.) through symlinks
+        for f in list(files):
+            try:
+                # Only filter out .adoc files from symlinked directories
+                if not f.src_path.endswith('.adoc'):
+                    continue
+
+                src_path = pathlib.Path(f.abs_src_path) if hasattr(f, 'abs_src_path') and f.abs_src_path else (pathlib.Path(f.src_dir) / f.src_path)
+                if self._is_inside_symlink(src_path.resolve(), src_dir):
+                    files.remove(f)
+                    continue
+            except (OSError, ValueError):
+                # If we can't resolve the path, skip it
+                pass
+
         # Remove .adoc files that MkDocs may have detected as static
         for f in list(files):
             if f.src_path.endswith(".adoc"):

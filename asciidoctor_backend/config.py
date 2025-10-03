@@ -72,7 +72,7 @@ class ConfigurationManager:
         self.base_dir = (
             (self.project_dir / base_dir_opt).resolve()
             if base_dir_opt
-            else self.docs_dir
+            else None
         )
 
         # Configure edit includes

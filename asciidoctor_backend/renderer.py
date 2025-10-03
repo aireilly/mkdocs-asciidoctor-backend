@@ -130,6 +130,11 @@ class AsciiDoctorRenderer:
 
             # Build attributes with sourcemap if edit_includes is enabled
             attributes = self.attributes.copy()
+
+            # Add leading slash to imagesdir for absolute paths
+            if 'imagesdir' in attributes and attributes['imagesdir'] and not attributes['imagesdir'].startswith('/'):
+                attributes['imagesdir'] = f"/{attributes['imagesdir']}"
+
             requires = self.requires.copy()
 
             if self.edit_includes and self.edit_base_url:
@@ -186,12 +191,18 @@ class AsciiDoctorRenderer:
         # Safety mode
         args.extend(["-S", self.safe_mode])
 
+        # Base directory
+        if self.base_dir:
+            args.extend(["-B", str(self.base_dir)])
+
         # Required libraries
         for r in self.requires:
             args.extend(["-r", r])
 
-        # Attributes
+        # Attributes (add leading slash to imagesdir for absolute paths)
         for k, v in self.attributes.items():
+            if k == 'imagesdir' and v and not v.startswith('/'):
+                v = f"/{v}"
             args.extend(["-a", f"{k}={v}"])
 
         # Optional flags

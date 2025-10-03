@@ -74,6 +74,12 @@ class AsciiDoctorPlugin(BasePlugin):
         # Configure from MkDocs config
         config = self.config_manager.configure_from_mkdocs_config(config)
 
+        # Override MkDocs file discovery to skip symlinks
+        self._setup_symlink_safe_file_discovery(config)
+
+        # Configure watchdog to handle symlinks safely (for mkdocs serve)
+        self._setup_symlink_safe_watching()
+
         # Initialize renderer with configuration
         self.renderer = AsciiDoctorRenderer(
             cmd=self.config_manager.cmd,
@@ -94,6 +100,84 @@ class AsciiDoctorPlugin(BasePlugin):
         self.renderer.start_server()
 
         return config
+
+    def _setup_symlink_safe_file_discovery(self, config: MkDocsConfig):
+        """Override os.walk to not follow symlinks - scoped to this plugin instance."""
+        # Store the original os.walk once
+        if not hasattr(self, '_original_os_walk'):
+            self._original_os_walk = os.walk
+
+            def walk_no_symlinks(top, **kwargs):
+                """Wrapper that forces followlinks=False."""
+                kwargs['followlinks'] = False
+                return self._original_os_walk(top, **kwargs)
+
+            # Replace os.walk globally
+            os.walk = walk_no_symlinks
+
+    def _setup_symlink_safe_watching(self):
+        """Configure watchdog to skip symlinks when watching directories."""
+        try:
+            import inspect
+            from watchdog.utils import dirsnapshot
+
+            # Check if we can safely patch DirectorySnapshot
+            sig = inspect.signature(dirsnapshot.DirectorySnapshot.__init__)
+            required_params = {'self', 'path', 'recursive', 'stat', 'listdir'}
+
+            if not required_params.issubset(sig.parameters.keys()):
+                # API doesn't match expected signature, skip patching
+                return
+
+            # Store original if not already stored
+            if hasattr(dirsnapshot.DirectorySnapshot, '_asciidoc_patched'):
+                return  # Already patched
+
+            original_init = dirsnapshot.DirectorySnapshot.__init__
+
+            def symlink_safe_init(self, path, recursive=True, stat=None, listdir=None):
+                """DirectorySnapshot that skips symlinked directories."""
+                import stat as stat_module
+
+                def safe_stat(p):
+                    """Stat that returns None for symlinks."""
+                    try:
+                        st = os.lstat(p)
+                        if stat_module.S_ISLNK(st.st_mode):
+                            return None
+                        return st
+                    except OSError:
+                        return None
+
+                def safe_listdir(p):
+                    """Listdir that filters out symlinks."""
+                    try:
+                        return [e for e in os.scandir(p) if not e.is_symlink()]
+                    except OSError:
+                        return []
+
+                # Call original with safe handlers
+                original_init(
+                    self,
+                    path,
+                    recursive=recursive,
+                    stat=safe_stat,
+                    listdir=safe_listdir
+                )
+
+            # Mark as patched
+            symlink_safe_init._asciidoc_patched = True
+            dirsnapshot.DirectorySnapshot.__init__ = symlink_safe_init
+            dirsnapshot.DirectorySnapshot._asciidoc_patched = True
+
+        except (ImportError, ValueError, KeyError):
+            # watchdog not installed or incompatible version - skip patching
+            # mkdocs serve won't work with symlinks but build will still work
+            pass
+
+    def on_serve(self, server, config, **kwargs):
+        """Hook for serve command - watchdog is already configured in on_config."""
+        return server
 
     def on_files(self, files: Files, config: MkDocsConfig) -> Files:
         """Register .adoc pages and prune broken files if requested."""
@@ -143,6 +227,37 @@ class AsciiDoctorPlugin(BasePlugin):
         """Write packaged CSS/JS into site/ so extra_css/extra_javascript resolve."""
         site_dir = pathlib.Path(config.site_dir)
         self.config_manager.write_assets_to_site(site_dir)
+
+        # Copy images directory if it exists
+        self._copy_images_directory(config)
+
+    def _copy_images_directory(self, config: MkDocsConfig):
+        """Copy images directory to site root based on imagesdir attribute."""
+        import shutil
+
+        # Get imagesdir from asciidoctor attributes
+        imagesdir = self.config_manager.attributes.get('imagesdir')
+        if not imagesdir:
+            return
+
+        # Look for images directory relative to docs_dir parent
+        docs_dir = pathlib.Path(config.docs_dir).resolve()
+        images_src = docs_dir.parent / imagesdir
+
+        # Resolve symlinks to get actual directory
+        if images_src.is_symlink():
+            images_src = images_src.resolve()
+
+        if not images_src.exists() or not images_src.is_dir():
+            return
+
+        site_dir = pathlib.Path(config.site_dir)
+        images_dest = site_dir / imagesdir
+
+        # Copy images to site
+        if images_dest.exists():
+            shutil.rmtree(images_dest)
+        shutil.copytree(images_src, images_dest, symlinks=False)
 
     # ---------- Page hooks ----------
 
