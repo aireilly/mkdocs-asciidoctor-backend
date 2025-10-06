@@ -1,7 +1,7 @@
 <!-- Taken from https://github.com/obedm503/markdown-kitchen-sink/blob/master/README.md -->
 # Markdown kitchen sink
 
-Peep this [link to an asciidoc file](page-2.adoc).
+Hi. Peep this [link to an asciidoc file](page-2.adoc).
 
 > [!NOTE]
 > 

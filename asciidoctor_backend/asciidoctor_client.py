@@ -89,7 +89,6 @@ class AsciidoctorServerClient:
         attributes: Optional[Dict] = None,
         requires: Optional[list] = None,
         base_dir: Optional[pathlib.Path] = None) -> Dict:
-        """Convert an AsciiDoc file using the server."""
         options = {
             "safe_mode": safe_mode,
             "attributes": attributes or {},
@@ -125,27 +124,14 @@ class AsciidoctorServerClient:
             self._server_process = None
 
     def _get_connection(self, timeout: float = 30.0):
-        """Get a connection from the pool or create a new one."""
-        try:
-            # Try to get a connection from the pool
-            sock = self._connection_pool.get_nowait()
-            # Verify connection is still alive
-            sock.settimeout(timeout)
-            return sock
-        except Empty:
-            # No available connection, create a new one
-            sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-            sock.settimeout(timeout)
-            sock.connect(self.socket_path)
-            return sock
+        """Create a new connection"""
+        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        sock.settimeout(timeout)
+        sock.connect(self.socket_path)
+        return sock
 
     def _return_connection(self, sock):
-        """Return a connection to the pool or close it if pool is full."""
-        try:
-            self._connection_pool.put_nowait(sock)
-        except:
-            # Pool is full, close the connection
-            sock.close()
+        sock.close()
 
     def _send_request(self, request: Dict, timeout: float = 30.0) -> Dict:
         """Send a request to the server and return the response."""

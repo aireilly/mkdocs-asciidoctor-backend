@@ -47,11 +47,13 @@ class AsciidoctorServer
     MAX_WORKERS.times do
       @workers << Thread.new do
         loop do
-          client = @queue.pop
-          handle_client(client)
-        rescue StandardError => e
-          warn "Error handling client: #{e.message}"
-          warn e.backtrace.join("\n")
+          begin
+            client = @queue.pop
+            handle_client(client)
+          rescue StandardError => e
+            warn "Error handling client: #{e.message}"
+            warn e.backtrace.join("\n")
+          end
         end
       end
     end
