@@ -89,12 +89,9 @@ class AsciidoctorServer
     file_path = request['file_path']
     options = build_options(request['options'] || {})
 
-    # Convert the document - convert_file returns the converted output directly
-    # when to_file: false
-    html = Asciidoctor.convert_file(file_path, options)
-
-    # Load the document separately to get metadata
+    # Load and convert the document once
     doc = Asciidoctor.load_file(file_path, options)
+    html = doc.convert
 
     {
       status: 'ok',
