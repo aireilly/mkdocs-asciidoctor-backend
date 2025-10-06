@@ -7,9 +7,14 @@ require 'socket'
 
 # Long-running AsciiDoctor backend server that processes conversion requests via a Unix socket
 class AsciidoctorServer
+  # Maximum number of concurrent worker threads
+  MAX_WORKERS = 16
+
   def initialize(socket_path)
     @socket_path = socket_path
     @server = nil
+    @queue = Queue.new
+    @workers = []
   end
 
   def start
@@ -23,26 +28,31 @@ class AsciidoctorServer
     trap('INT') { shutdown }
     trap('TERM') { shutdown }
 
-    # Thread pool to handle concurrent requests
-    @threads = []
+    # Start worker thread pool
+    start_workers
 
+    # Accept connections and queue them for workers
     loop do
       begin
         client = @server.accept
+        @queue << client
+      rescue StandardError => e
+        warn "Error accepting client: #{e.message}"
+        warn e.backtrace.join("\n")
+      end
+    end
+  end
 
-        # Handle each client in a separate thread for concurrent processing
-        @threads << Thread.new(client) do |conn|
-          handle_client(conn)
+  def start_workers
+    MAX_WORKERS.times do
+      @workers << Thread.new do
+        loop do
+          client = @queue.pop
+          handle_client(client)
         rescue StandardError => e
           warn "Error handling client: #{e.message}"
           warn e.backtrace.join("\n")
         end
-
-        # Clean up finished threads
-        @threads.reject!(&:alive?)
-      rescue StandardError => e
-        warn "Error accepting client: #{e.message}"
-        warn e.backtrace.join("\n")
       end
     end
   end

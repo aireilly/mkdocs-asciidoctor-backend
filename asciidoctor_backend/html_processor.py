@@ -24,9 +24,17 @@ from .utils import slugify
 
 
 class HtmlProcessor:
-    def __init__(self, bs_parser: str = "html.parser", use_dir_urls: bool = True,
+    def __init__(self, bs_parser: str = None, use_dir_urls: bool = True,
                  edit_includes: bool = False, edit_base_url: str = ""):
-        self.bs_parser = bs_parser
+        # Auto-detect best parser: prefer lxml, fallback to html.parser
+        if bs_parser is None:
+            try:
+                import lxml
+                self.bs_parser = "lxml"
+            except ImportError:
+                self.bs_parser = "html.parser"
+        else:
+            self.bs_parser = bs_parser
         self.use_dir_urls = use_dir_urls
         self.edit_includes = edit_includes
         self.edit_base_url = edit_base_url

@@ -11,12 +11,17 @@ import socket
 import struct
 import subprocess
 import time
+from queue import Queue, Empty
+from threading import Lock
 from typing import Dict, Optional
 
 log = logging.getLogger("mkdocs.plugins.asciidoctor_backend.server")
 
 
 class AsciidoctorServerClient:
+    # Connection pool size
+    POOL_SIZE = 4
+
     def __init__(self, socket_path: str = "/tmp/asciidoctor.sock",
                  server_script: Optional[pathlib.Path] = None,
                  auto_start: bool = True):
@@ -24,6 +29,8 @@ class AsciidoctorServerClient:
         self.server_script = server_script
         self.auto_start = auto_start
         self._server_process = None
+        self._connection_pool = Queue(maxsize=self.POOL_SIZE)
+        self._pool_lock = Lock()
 
     def __enter__(self):
         if self.auto_start:
@@ -31,6 +38,14 @@ class AsciidoctorServerClient:
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
+        # Close all pooled connections
+        while not self._connection_pool.empty():
+            try:
+                conn = self._connection_pool.get_nowait()
+                conn.close()
+            except Empty:
+                break
+
         if self.auto_start and self._server_process:
             self.shutdown_server()
 
@@ -109,13 +124,34 @@ class AsciidoctorServerClient:
                 self._server_process.wait()
             self._server_process = None
 
+    def _get_connection(self, timeout: float = 30.0):
+        """Get a connection from the pool or create a new one."""
+        try:
+            # Try to get a connection from the pool
+            sock = self._connection_pool.get_nowait()
+            # Verify connection is still alive
+            sock.settimeout(timeout)
+            return sock
+        except Empty:
+            # No available connection, create a new one
+            sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            sock.settimeout(timeout)
+            sock.connect(self.socket_path)
+            return sock
+
+    def _return_connection(self, sock):
+        """Return a connection to the pool or close it if pool is full."""
+        try:
+            self._connection_pool.put_nowait(sock)
+        except:
+            # Pool is full, close the connection
+            sock.close()
+
     def _send_request(self, request: Dict, timeout: float = 30.0) -> Dict:
         """Send a request to the server and return the response."""
-        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        sock.settimeout(timeout)
-
+        sock = None
         try:
-            sock.connect(self.socket_path)
+            sock = self._get_connection(timeout)
 
             # Send request
             request_json = json.dumps(request).encode('utf-8')
@@ -142,7 +178,12 @@ class AsciidoctorServerClient:
             if response.get("status") == "error":
                 raise RuntimeError(f"Server error: {response.get('message')}")
 
+            # Return connection to pool
+            self._return_connection(sock)
             return response
 
-        finally:
-            sock.close()
+        except Exception as e:
+            # On error, close the connection and don't return to pool
+            if sock:
+                sock.close()
+            raise
