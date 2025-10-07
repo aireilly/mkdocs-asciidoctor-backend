@@ -7,7 +7,7 @@ Use AsciiDoc with Material for MkDocs.
 
 This MkDocs plugin replaces the MkDocs default Markdown processor with [Asciidoctor](https://asciidoctor.org/) for AsciiDoc files, allowing you to write documentation in AsciiDoc while keeping full compatibility with Material for MkDocs.
 
-It uses a long-running Ruby Asciidoctor backend server for fast rendering of `*.adoc` files, normalizes the output HTML with BeautifulSoup, and adjusts it to match MkDocs conventions.
+The plugin uses Asciidoctor to build and then adjusts the output it to match MkDocs conventions.
 The plugin ships some CSS/JS/RB and optionally injects "edit this page" links for included AsciiDoc modules when `repo_url` and `edit_uri` are configured.
 
 Supports hot reload on the development server for all AsciiDoc source files when writing.

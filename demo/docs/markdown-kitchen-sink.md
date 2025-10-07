@@ -1,13 +1,13 @@
 <!-- Taken from https://github.com/obedm503/markdown-kitchen-sink/blob/master/README.md -->
 # Markdown kitchen sink
 
-Hi. Peep this [link to an asciidoc file](page-2.adoc).
+Hi. Review this [link to an asciidoc file](page-2.adoc).
 
 > [!NOTE]
 > 
 > This is a GFM note.
 
-This is intended as a quick reference and showcase. For more complete info, see [John Gruber's original spec](http://daringfireball.net/projects/markdown/) and the [Github-flavored Markdown info page](http://github.github.com/github-flavored-markdown/).
+This is intended as a quick reference and showcase. For more complete info, see [John Gruber's original spec](http://daringfireball.net/projects/markdown/) and the [Github-flavored Markdown   info page](http://github.github.com/github-flavored-markdown/).
 
 <a name="headers"></a>
 

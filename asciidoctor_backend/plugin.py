@@ -51,9 +51,6 @@ class AsciiDoctorPlugin(BasePlugin):
         ("edit_includes", config_options.Type(bool, default=False)),
         ("edit_base_url", config_options.Type(str, default="")),
         ("repo_root", config_options.Type(str, default=None)),
-        # Long-running server feature
-        ("use_server", config_options.Type(bool, default=True)),
-        ("server_socket", config_options.Type(str, default="/tmp/asciidoctor.sock")),
     )
 
     def __init__(self):
@@ -81,6 +78,7 @@ class AsciiDoctorPlugin(BasePlugin):
         self._setup_symlink_safe_watching()
 
         # Initialize renderer with configuration
+        # Uses direct subprocess calls like MkDocs does with Markdown
         self.renderer = AsciiDoctorRenderer(
             cmd=self.config_manager.cmd,
             safe_mode=self.config_manager.safe_mode,
@@ -91,13 +89,8 @@ class AsciiDoctorPlugin(BasePlugin):
             trace=self.config_manager.trace,
             edit_includes=self.config_manager.edit_includes,
             edit_base_url=self.config_manager.edit_base_url,
-            use_dir_urls=bool(config.use_directory_urls),
-            use_server=self.config["use_server"],
-            server_socket=self.config["server_socket"]
+            use_dir_urls=bool(config.use_directory_urls)
         )
-
-        # Start the server if enabled
-        self.renderer.start_server()
 
         return config
 
@@ -175,7 +168,7 @@ class AsciiDoctorPlugin(BasePlugin):
             # mkdocs serve won't work with symlinks but build will still work
             pass
 
-    def on_serve(self, server, config, **kwargs):
+    def on_serve(self, server, *, config, builder):
         """Hook for serve command - watchdog is already configured in on_config."""
         return server
 
@@ -272,7 +265,6 @@ class AsciiDoctorPlugin(BasePlugin):
         src_abs = self.file_processor.get_adoc_path(page)
         rendered = self.renderer.render_adoc_cached(src_abs)
         page.meta = rendered.meta or {}
-        page.file.abs_src_path = str(src_abs)
         return ""  # skip Markdown pipeline
 
     def on_page_content(self, html: str, page: Page, config: MkDocsConfig, files: Files) -> str:

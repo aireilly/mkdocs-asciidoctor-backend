@@ -12,8 +12,8 @@ python -m pip install -U mkdocs-material
 python -m mkdocs --version
 
 # Run a build
-python -m mkdocs build -f demo/mkdocs.yml -v \
-&& python -m mkdocs serve -f demo/mkdocs.yml
+python -m mkdocs build -f demo/mkdocs.yml -v && \
+python -m mkdocs serve --livereload -f demo/mkdocs.yml
 
 # Package
 python -m pip install --upgrade build twine
