@@ -121,6 +121,9 @@ class FileProcessor:
                 )
                 f.is_documentation_page = (lambda f=f: True)  # MkDocs 1.6
 
+                # Set abs_src_path so watchdog can track changes
+                f.abs_src_path = str(p)
+
                 self.adoc_pages[rel] = p
 
                 # Compute dest_path + url (mirror Markdown behavior)
