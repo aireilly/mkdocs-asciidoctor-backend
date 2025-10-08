@@ -10,6 +10,24 @@ Some text! Yes some text. Some more text.
 
 This is the xref:page-2.adoc#other-section[other-section] xref.
 
+This is some YAML:
+
+[source,yaml]
+----
+apiVersion: operator.openshift.io/v1alpha1
+kind: ImageContentSourcePolicy
+metadata:
+  name: mirror-ocp
+spec:
+  repositoryDigestMirrors:
+  - mirrors:
+    - mirror.registry.com:443/ocp/release
+    source: quay.io/openshift-release-dev/ocp-release
+  - mirrors:
+    - mirror.registry.com:443/ocp/release
+    source: quay.io/openshift-release-dev/ocp-v4.0-art-dev
+----
+
 [source,terminal]
 ----
 $ some code -f
