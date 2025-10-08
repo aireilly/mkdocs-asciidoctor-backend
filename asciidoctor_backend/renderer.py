@@ -4,6 +4,7 @@
 AsciiDoctor rendering module
 """
 
+import os
 import pathlib
 import subprocess
 from typing import Dict, List, Optional, Tuple
@@ -42,6 +43,9 @@ class AsciiDoctorRenderer:
         # Cache for rendered content
         self._cache: Dict[str, Tuple[float, Rendered]] = {}
         self._memo: Dict[str, Rendered] = {}
+
+        # Cache subprocess environment to reduce overhead
+        self._cached_env: Optional[Dict[str, str]] = None
 
     def clear_memo(self):
         """Clear the per-build memo cache."""
@@ -87,12 +91,30 @@ class AsciiDoctorRenderer:
         html, toc, meta = self.html_processor.postprocess_html(html)
         return Rendered(html=html, toc=toc, meta=meta)
 
+    def _get_cached_env(self) -> Dict[str, str]:
+        """Get cached subprocess environment to reduce overhead."""
+        if self._cached_env is None:
+            self._cached_env = os.environ.copy()
+        return self._cached_env
+
     def _run_asciidoctor(self, src_path: pathlib.Path) -> str:
         """Execute asciidoctor command and return HTML."""
-        args = self._build_asciidoctor_args(src_path)
+        args = self._build_asciidoctor_args_stdin(src_path)
 
         try:
-            proc = subprocess.run(args, check=True, capture_output=True, text=True)
+            # Read file content once
+            with open(src_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+
+            # Use stdin to reduce file I/O overhead and cached environment
+            proc = subprocess.run(
+                args,
+                input=content,
+                check=True,
+                capture_output=True,
+                text=True,
+                env=self._get_cached_env()
+            )
             return proc.stdout
 
         except FileNotFoundError:
@@ -108,8 +130,56 @@ class AsciiDoctorRenderer:
                 raise SystemExit(msg)
             return f"<pre>{escape_html(msg)}</pre>"
 
+        except (IOError, OSError) as e:
+            msg = f"Failed to read {src_path}: {e}"
+            if self.fail_on_error:
+                raise SystemExit(msg)
+            return f"<pre>{escape_html(msg)}</pre>"
+
+    def _build_asciidoctor_args_stdin(self, src_path: pathlib.Path) -> List[str]:
+        """Build command line arguments for asciidoctor using stdin.
+
+        When reading from stdin, we must set the base directory to the source file's
+        directory so that include:: directives can resolve relative paths correctly.
+        """
+        # Use "-" as input to read from stdin, "-" as output to write to stdout
+        args = [self.cmd, "-b", "html5", "-s", "-o", "-", "-"]
+
+        # Safety mode
+        args.extend(["-S", self.safe_mode])
+
+        # Base directory - use source file's directory when using stdin
+        # This allows include:: directives to resolve relative paths
+        if self.base_dir:
+            args.extend(["-B", str(self.base_dir)])
+        else:
+            # When reading from stdin, we MUST set base_dir to source file's parent
+            # otherwise includes won't resolve
+            args.extend(["-B", str(src_path.parent)])
+
+        # Required libraries
+        for r in self.requires:
+            args.extend(["-r", r])
+
+        # Attributes (add leading slash to imagesdir for absolute paths)
+        for k, v in self.attributes.items():
+            if k == 'imagesdir' and v and not v.startswith('/'):
+                v = f"/{v}"
+            args.extend(["-a", f"{k}={v}"])
+
+        # Optional flags
+        if self.trace:
+            args.append("--trace")
+
+        # Include edit helper
+        if self.edit_includes and self.edit_base_url:
+            args.extend(["-a", "sourcemap"])
+            self._add_include_edit_helper(args)
+
+        return args
+
     def _build_asciidoctor_args(self, src_path: pathlib.Path) -> List[str]:
-        """Build command line arguments for asciidoctor."""
+        """Build command line arguments for asciidoctor (legacy, file-based)."""
         args = [self.cmd, "-b", "html5", "-s", "-o", "-", str(src_path)]
 
         # Safety mode
