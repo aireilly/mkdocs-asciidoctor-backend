@@ -123,10 +123,8 @@ class AsciiDoctorRenderer:
         for r in self.requires:
             args.extend(["-r", r])
 
-        # Attributes (add leading slash to imagesdir for absolute paths)
+        # Attributes
         for k, v in self.attributes.items():
-            if k == 'imagesdir' and v and not v.startswith('/'):
-                v = f"/{v}"
             args.extend(["-a", f"{k}={v}"])
 
         # Optional flags
