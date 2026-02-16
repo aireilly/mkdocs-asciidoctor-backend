@@ -14,8 +14,9 @@ Handles post-processing of HTML output from Asciidoctor:
 - Edit include marker processing
 """
 
+import posixpath
 import re
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 from bs4 import BeautifulSoup, NavigableString
 from mkdocs.structure.toc import AnchorLink, TableOfContents as Toc
@@ -39,7 +40,7 @@ class HtmlProcessor:
         self.edit_includes = edit_includes
         self.edit_base_url = edit_base_url
 
-    def postprocess_html(self, html: str) -> Tuple[str, Toc, dict]:
+    def postprocess_html(self, html: str, page_rel_path: Optional[str] = None) -> Tuple[str, Toc, dict]:
         """Process HTML and return processed HTML, table of contents, and metadata."""
         soup = BeautifulSoup(html, self.bs_parser)
 
@@ -56,7 +57,7 @@ class HtmlProcessor:
         self._clean_callouts_in_code(soup)
         self._transform_tables(soup)
         self._transform_figures(soup)
-        self._fix_xref_urls(soup)
+        self._fix_xref_urls(soup, page_rel_path)
 
         if self.edit_includes and self.edit_base_url:
             self._process_include_edit_markers(soup)
@@ -252,24 +253,61 @@ class HtmlProcessor:
             content_el.decompose()
             ib.replace_with(fig)
 
-    def _fix_xref_urls(self, soup: BeautifulSoup):
-        """Fix cross-reference URLs to match MkDocs routing."""
+    def _fix_xref_urls(self, soup: BeautifulSoup, page_rel_path: Optional[str] = None):
+        """Fix cross-reference URLs to match MkDocs routing.
+
+        When use_dir_urls is True, MkDocs serves pages from subdirectories
+        (e.g. ``page.adoc`` becomes ``page/index.html``).  Asciidoctor emits
+        relative hrefs based on the *file* location, so they resolve
+        incorrectly from the deeper directory-URL location.  This method
+        resolves relative hrefs against the source file's directory and then
+        recomputes them relative to the page's directory-URL location.
+        """
         def _to_dir_url(href: str) -> str:
             if not href or href.startswith(("#", "http://", "https://", "mailto:", "tel:")):
                 return href
             if not self.use_dir_urls:
                 # replace ".../name.adoc" -> ".../name.html"
                 return re.sub(r"(^|/)([^/#?]+)\.adoc(?=($|[#?]))", r"\1\2.html", href)
-            # dir-urls
+
+            # --- directory-URL mode ---
+            # Split off fragment and query
             path, frag = (href.split("#", 1) + [""])[:2]
             path_q, query = (path.split("?", 1) + [""])[:2]
             path_only = path_q
+
+            # Convert file extension to trailing slash
             if path_only.endswith("/index.html"):
                 path_only = path_only[:-len("index.html")]
             elif path_only.endswith(".html"):
                 path_only = path_only[:-len(".html")] + "/"
             elif path_only.endswith(".adoc"):
                 path_only = path_only[:-len(".adoc")] + "/"
+
+            # Resolve relative paths when we know the source page location
+            if page_rel_path and not path_only.startswith("/"):
+                src_dir = posixpath.dirname(page_rel_path)
+                # Resolve href relative to the source file's directory
+                had_trailing_slash = path_only.endswith("/")
+                abs_path = posixpath.normpath(posixpath.join(src_dir, path_only))
+                if had_trailing_slash and not abs_path.endswith("/"):
+                    abs_path += "/"
+
+                # Determine the page's directory-URL base directory
+                page_basename = posixpath.splitext(posixpath.basename(page_rel_path))[0]
+                if page_basename == "index":
+                    # Index pages serve from the same directory
+                    page_url_dir = src_dir
+                else:
+                    # Non-index pages serve from a subdirectory named after the file
+                    page_url_dir = posixpath.join(src_dir, page_basename)
+
+                # Recompute the relative path from the directory-URL location
+                abs_clean = abs_path.rstrip("/")
+                path_only = posixpath.relpath(abs_clean, page_url_dir)
+                if had_trailing_slash and not path_only.endswith("/"):
+                    path_only += "/"
+
             new = path_only
             if query:
                 new += "?" + query

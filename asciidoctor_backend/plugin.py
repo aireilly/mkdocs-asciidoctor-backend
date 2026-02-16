@@ -89,7 +89,8 @@ class AsciiDoctorPlugin(BasePlugin):
             trace=self.config_manager.trace,
             edit_includes=self.config_manager.edit_includes,
             edit_base_url=self.config_manager.edit_base_url,
-            use_dir_urls=bool(config.use_directory_urls)
+            use_dir_urls=bool(config.use_directory_urls),
+            docs_dir=self.config_manager.docs_dir
         )
 
         return config

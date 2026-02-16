@@ -20,7 +20,8 @@ class AsciiDoctorRenderer:
                  base_dir: Optional[pathlib.Path] = None, attributes: Optional[Dict] = None,
                  requires: Optional[List[str]] = None, fail_on_error: bool = True,
                  trace: bool = False, edit_includes: bool = False,
-                 edit_base_url: str = "", use_dir_urls: bool = True):
+                 edit_base_url: str = "", use_dir_urls: bool = True,
+                 docs_dir: Optional[pathlib.Path] = None):
         self.cmd = cmd
         self.safe_mode = safe_mode
         self.base_dir = base_dir
@@ -31,6 +32,7 @@ class AsciiDoctorRenderer:
         self.edit_includes = edit_includes
         self.edit_base_url = edit_base_url
         self.use_dir_urls = use_dir_urls
+        self.docs_dir = docs_dir
 
         # Initialize HTML processor
         self.html_processor = HtmlProcessor(
@@ -84,7 +86,16 @@ class AsciiDoctorRenderer:
     def _render_file(self, src_path: pathlib.Path) -> Rendered:
         """Render a single AsciiDoc file."""
         html = self._run_asciidoctor(src_path)
-        html, toc, meta = self.html_processor.postprocess_html(html)
+
+        # Compute page path relative to docs_dir for xref resolution
+        page_rel_path = None
+        if self.docs_dir:
+            try:
+                page_rel_path = str(src_path.resolve().relative_to(self.docs_dir))
+            except ValueError:
+                pass
+
+        html, toc, meta = self.html_processor.postprocess_html(html, page_rel_path)
         return Rendered(html=html, toc=toc, meta=meta)
 
     def _run_asciidoctor(self, src_path: pathlib.Path) -> str:
