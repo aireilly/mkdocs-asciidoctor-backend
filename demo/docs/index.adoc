@@ -137,6 +137,8 @@ Do you feel safer with the tiger in a box?
 .Tiger in a box
 image::cat.jpg[Tiger, 500px]
 
+Here is an inline image: image:cat.jpg[Cat icon, 32px] embedded within a paragraph of text.
+
 .Asciidoctor usage example, should contain 3 lines
 [source, ruby]
 ----
