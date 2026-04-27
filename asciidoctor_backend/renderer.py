@@ -38,7 +38,8 @@ class AsciiDoctorRenderer:
         self.html_processor = HtmlProcessor(
             use_dir_urls=use_dir_urls,
             edit_includes=edit_includes,
-            edit_base_url=edit_base_url
+            edit_base_url=edit_base_url,
+            imagesdir=self.attributes.get('imagesdir', '')
         )
 
         # Cache for rendered content

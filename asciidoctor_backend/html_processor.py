@@ -26,7 +26,8 @@ from .utils import slugify
 
 class HtmlProcessor:
     def __init__(self, bs_parser: str = None, use_dir_urls: bool = True,
-                 edit_includes: bool = False, edit_base_url: str = ""):
+                 edit_includes: bool = False, edit_base_url: str = "",
+                 imagesdir: str = ""):
         # Auto-detect best parser: prefer lxml, fallback to html.parser
         if bs_parser is None:
             try:
@@ -39,6 +40,7 @@ class HtmlProcessor:
         self.use_dir_urls = use_dir_urls
         self.edit_includes = edit_includes
         self.edit_base_url = edit_base_url
+        self.imagesdir = imagesdir
 
     def postprocess_html(self, html: str, page_rel_path: Optional[str] = None) -> Tuple[str, Toc, dict]:
         """Process HTML and return processed HTML, table of contents, and metadata."""
@@ -57,6 +59,7 @@ class HtmlProcessor:
         self._clean_callouts_in_code(soup)
         self._transform_tables(soup)
         self._transform_figures(soup)
+        self._fix_image_paths(soup, page_rel_path)
         self._fix_xref_urls(soup, page_rel_path)
 
         if self.edit_includes and self.edit_base_url:
@@ -252,6 +255,40 @@ class HtmlProcessor:
 
             content_el.decompose()
             ib.replace_with(fig)
+
+    def _fix_image_paths(self, soup: BeautifulSoup, page_rel_path: Optional[str] = None):
+        """Rewrite image src attributes for pages in subdirectories.
+
+        Asciidoctor emits image paths relative to the source document
+        using the imagesdir attribute.  When the page lives in a
+        subdirectory the browser resolves those relative paths from
+        the page URL, not the site root where image assets are served.
+        """
+        if not page_rel_path or not self.imagesdir:
+            return
+
+        src_dir = posixpath.dirname(page_rel_path)
+        if not src_dir:
+            return
+
+        page_basename = posixpath.splitext(posixpath.basename(page_rel_path))[0]
+        if self.use_dir_urls and page_basename != "index":
+            page_url_dir = posixpath.join(src_dir, page_basename)
+        else:
+            page_url_dir = src_dir
+
+        if not page_url_dir:
+            return
+
+        prefix = self.imagesdir.rstrip("/") + "/"
+
+        for img in soup.find_all("img", src=True):
+            src = img["src"]
+            if not src.startswith(prefix):
+                continue
+            new_src = posixpath.relpath(src, page_url_dir)
+            if new_src != src:
+                img["src"] = new_src
 
     def _fix_xref_urls(self, soup: BeautifulSoup, page_rel_path: Optional[str] = None):
         """Fix cross-reference URLs to match MkDocs routing.
