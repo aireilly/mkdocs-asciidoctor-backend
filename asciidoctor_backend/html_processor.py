@@ -341,6 +341,10 @@ class HtmlProcessor:
 
                 # Recompute the relative path from the directory-URL location
                 abs_clean = abs_path.rstrip("/")
+                # index pages are served from their parent directory
+                # (docs/index.adoc -> /, docs/sub/index.adoc -> /sub/)
+                if posixpath.basename(abs_clean) == "index":
+                    abs_clean = posixpath.dirname(abs_clean) or "."
                 path_only = posixpath.relpath(abs_clean, page_url_dir)
                 if had_trailing_slash and not path_only.endswith("/"):
                     path_only += "/"
