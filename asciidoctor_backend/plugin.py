@@ -175,6 +175,11 @@ class AsciiDoctorPlugin(BasePlugin):
 
     def on_files(self, files: Files, config: MkDocsConfig) -> Files:
         """Register .adoc pages and prune broken files if requested."""
+        # docs_dir may have been swapped after on_config (e.g. mkdocs-monorepo-plugin,
+        # injected unconditionally by mkdocs-techdocs-core, copies docs to a temp dir).
+        # Refresh the renderer's docs_dir so xref resolution keeps working.
+        if self.renderer:
+            self.renderer.docs_dir = pathlib.Path(config.docs_dir).resolve()
         return self.file_processor.process_files(files, config)
 
     def on_nav(self, nav, config: MkDocsConfig, files: Files):
